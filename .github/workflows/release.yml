@@ -1,0 +1,94 @@
+name: Launcher release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            assets: "Stria-Launcher-macos-arm64.dmg"
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            assets: "Stria-Launcher-windows-x64-setup.exe"
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            assets: "Stria-Launcher-linux-x86_64.AppImage Stria-Launcher-linux-x86_64.deb"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
+
+      - name: Build release bundles
+        working-directory: src-tauri
+        run: |
+          cargo install tauri-cli --version '^2' --locked
+          cargo tauri build --target ${{ matrix.target }}
+
+      - name: Collect assets (exact contract names)
+        shell: bash
+        run: |
+          mkdir -p dist
+          # Tauri emits bundles under target/<target>/release/bundle/...
+          # Copy each artifact to its contract name expected by
+          # striasystems.com/download.
+          find target -path '*bundle/dmg/*.dmg' -exec cp {} "dist/Stria-Launcher-macos-arm64.dmg" \; || true
+          find target -path '*bundle/nsis/*.exe' -exec cp {} "dist/Stria-Launcher-windows-x64-setup.exe" \; || true
+          find target -path '*bundle/appimage/*.AppImage' -exec cp {} "dist/Stria-Launcher-linux-x86_64.AppImage" \; || true
+          find target -path '*bundle/deb/*.deb' -exec cp {} "dist/Stria-Launcher-linux-x86_64.deb" \; || true
+          ls -la dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-${{ matrix.target }}
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          rm -f sha256sums.txt
+          shasum -a 256 * > sha256sums.txt || sha256sum * > sha256sums.txt
+          cat sha256sums.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true

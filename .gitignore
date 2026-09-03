@@ -1,0 +1,10 @@
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+node_modules/
+dist/
+*.dmg
+*.exe
+*.AppImage
+*.deb
+.DS_Store

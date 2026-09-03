@@ -1,0 +1,21 @@
+[package]
+name = "stria-launcher"
+version = "0.1.0"
+description = "Stria launcher — installs Stria Works + Stria-Pi, registers the workspace, pairs to the portal."
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

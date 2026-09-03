@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Stria Launcher",
+  "version": "0.1.0",
+  "identifier": "com.striasystems.launcher",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Stria",
+        "width": 760,
+        "height": 560,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "appimage", "deb", "nsis"],
+    "icon": ["icons/icon.png"]
+  }
+}

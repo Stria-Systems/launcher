@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stria</title>
+  <style>
+    /* Launcher first-run: obsidian + sage, matching the machine-room page
+       that sent the user here. No framework — this ships inside the binary. */
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font-family: -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+      background: linear-gradient(160deg, #0a120d 0%, #08100b 60%, #0c1610 100%);
+      color: #e8f4ec;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      width: min(560px, 90vw);
+      border: 1px solid rgba(126, 232, 176, 0.16);
+      border-radius: 16px;
+      background: rgba(18, 30, 22, 0.72);
+      padding: 36px 32px;
+      box-shadow: 0 24px 56px -32px rgba(0, 0, 0, 0.6);
+    }
+    .eyebrow {
+      color: #7ee8b0;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; color: #f2f9f4; }
+    .sub { color: rgba(232, 244, 236, 0.64); font-size: 14px; line-height: 1.55; margin-bottom: 24px; }
+    label { display: block; font-size: 12.5px; color: rgba(232,244,236,0.7); margin: 14px 0 6px; }
+    input {
+      width: 100%;
+      background: rgba(5, 11, 7, 0.7);
+      border: 1px solid rgba(126, 232, 176, 0.16);
+      border-radius: 10px;
+      color: #f2f9f4;
+      font-size: 14px;
+      padding: 11px 14px;
+      outline: none;
+    }
+    input:focus { border-color: rgba(126, 232, 176, 0.5); }
+    button {
+      width: 100%;
+      margin-top: 22px;
+      background: #7ee8b0;
+      border: none;
+      border-radius: 10px;
+      color: #06130b;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px;
+      cursor: pointer;
+    }
+    button:hover { background: #93f0c2; }
+    .status { margin-top: 16px; font-size: 13px; color: #7ee8b0; min-height: 18px; }
+    .status.err { color: #f0a0a0; }
+    .pairing {
+      margin-top: 20px; border-top: 1px solid rgba(126,232,176,0.1); padding-top: 18px;
+    }
+    code {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 15px; letter-spacing: 0.08em; color: #7ee8b0;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <p class="eyebrow">Stria Launcher</p>
+    <h1>Set up your workspace.</h1>
+    <p class="sub">
+      The launcher installs Stria Works and Stria-Pi, then pairs this machine
+      to your organization's portal. Your objectives, evidence, and costs live
+      at portal.striasystems.com.
+    </p>
+    <form id="reg">
+      <label for="email">Work email</label>
+      <input id="email" type="email" autocomplete="email" required />
+      <label for="org">Organization name</label>
+      <input id="org" type="text" autocomplete="organization" required />
+      <label for="pass">Password (10+ characters)</label>
+      <input id="pass" type="password" autocomplete="new-password" minlength="10" required />
+      <button type="submit" id="submit">Create workspace</button>
+    </form>
+    <div class="pairing">
+      <label for="code">Pairing code from the portal (AAA-BBB-CCC)</label>
+      <input id="code" type="text" autocomplete="off" placeholder="AAA-BBB-CCC" />
+      <p class="status" id="status"></p>
+    </div>
+  </div>
+  <script>
+    const status = (msg, err) => {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "status" + (err ? " err" : "");
+    };
+    document.getElementById("reg").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      status("Creating your workspace…");
+      try {
+        await window.__TAURI__.core.invoke("register_workspace", {
+          email: document.getElementById("email").value,
+          organization: document.getElementById("org").value,
+          password: document.getElementById("pass").value,
+        });
+        status("Workspace created. Now pair this machine: open the portal, copy the pairing code, paste it below.");
+      } catch (err) {
+        status(String(err), true);
+      }
+    });
+    document.getElementById("code").addEventListener("change", async (e) => {
+      const code = e.target.value.trim();
+      if (!/^[A-Z2-9]{3}-[A-Z2-9]{3}-[A-Z2-9]{3}$/.test(code)) return;
+      status("Pairing this machine…");
+      try {
+        const token = await window.__TAURI__.core.invoke("pair_machine", { pairingCode: code });
+        status("Paired. Launching Stria Works…");
+      } catch (err) {
+        status(String(err), true);
+      }
+    });
+  </script>
+</body>
+</html>
