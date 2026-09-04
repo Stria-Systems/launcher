@@ -1,5 +1,29 @@
 name: Launcher release
 
+# v0.1.0 release pipeline — signed, notarized, fail-closed.
+#
+# NO UNSIGNED RELEASES: every build job verifies its own signature before
+# uploading artifacts, and the publish job refuses to run unless ALL
+# signing secrets exist AND all contract assets are present. When secrets
+# are missing the run fails with a clear message — it never publishes.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   APPLE_CERTIFICATE_P12     Developer ID Application cert, base64
+#   APPLE_CERTIFICATE_PWD     .p12 export password
+#   APPLE_SIGNING_IDENTITY    e.g. "Developer ID Application: Stria Systems (TEAMID)"
+#   APPLE_ID                  Apple ID email for notarytool
+#   APPLE_APP_SPECIFIC_PASSWORD  app-specific password for notarytool
+#   APPLE_TEAM_ID             App Store Connect team id
+#   KEYCHAIN_PASSWORD         any strong random string (CI keychain)
+#   WINDOWS_CERT_PFX          Authenticode cert (EV preferred), base64
+#   WINDOWS_CERT_PWD          .pfx password
+#
+# Tested matrix (§24: only advertise what we can test):
+#   macOS arm64 (dmg) · Windows x64 (nsis exe) · Linux x64 (AppImage+deb)
+#
+# Dry runs: workflow_dispatch builds + verifies but never publishes
+# (publish only fires on tags starting with v).
+
 on:
   push:
     tags: ['v*']
@@ -8,6 +32,12 @@ on:
 permissions:
   contents: write
 
+env:
+  MACOS_ASSET: Stria-Launcher-macos-arm64.dmg
+  WINDOWS_ASSET: Stria-Launcher-windows-x64-setup.exe
+  LINUX_APPIMAGE: Stria-Launcher-linux-x86_64.AppImage
+  LINUX_DEB: Stria-Launcher-linux-x86_64.deb
+
 jobs:
   build:
     name: Build ${{ matrix.label }}
@@ -15,15 +45,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - label: macOS (Apple Silicon)
+            os: macos-14
             target: aarch64-apple-darwin
-            assets: "Stria-Launcher-macos-arm64.dmg"
-          - os: windows-latest
+          - label: Windows x64
+            os: windows-latest
             target: x86_64-pc-windows-msvc
-            assets: "Stria-Launcher-windows-x64-setup.exe"
-          - os: ubuntu-22.04
+          - label: Linux x64
+            os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            assets: "Stria-Launcher-linux-x86_64.AppImage Stria-Launcher-linux-x86_64.deb"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +74,48 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
 
-      - name: Build release bundles
+      - name: Cache cargo
+        if: runner.os != 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-tauri-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-tauri-
+
+      # ── macOS signing environment ──────────────────────────────────
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PWD: ${{ secrets.APPLE_CERTIFICATE_PWD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > /tmp/cert.p12
+          KEYCHAIN_PATH=/tmp/stria-build.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import /tmp/cert.p12 -P "$APPLE_CERTIFICATE_PWD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          rm /tmp/cert.p12
+
+      # Tauri's macOS bundler signs with APPLE_SIGNING_IDENTITY when set.
+      - name: Build release bundles (macOS, signed)
+        if: runner.os == 'macOS'
+        working-directory: src-tauri
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          cargo install tauri-cli --version '^2' --locked
+          cargo tauri build --target ${{ matrix.target }}
+
+      - name: Build release bundles (Windows/Linux)
+        if: runner.os != 'macOS'
         working-directory: src-tauri
         run: |
           cargo install tauri-cli --version '^2' --locked
@@ -54,14 +125,49 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          # Tauri emits bundles under target/<target>/release/bundle/...
-          # Copy each artifact to its contract name expected by
-          # striasystems.com/download.
-          find target -path '*bundle/dmg/*.dmg' -exec cp {} "dist/Stria-Launcher-macos-arm64.dmg" \; || true
-          find target -path '*bundle/nsis/*.exe' -exec cp {} "dist/Stria-Launcher-windows-x64-setup.exe" \; || true
-          find target -path '*bundle/appimage/*.AppImage' -exec cp {} "dist/Stria-Launcher-linux-x86_64.AppImage" \; || true
-          find target -path '*bundle/deb/*.deb' -exec cp {} "dist/Stria-Launcher-linux-x86_64.deb" \; || true
+          find target -path '*bundle/dmg/*.dmg' -exec cp {} "dist/${MACOS_ASSET}" \; || true
+          find target -path '*bundle/nsis/*.exe' -exec cp {} "dist/${WINDOWS_ASSET}" \; || true
+          find target -path '*bundle/appimage/*.AppImage' -exec cp {} "dist/${LINUX_APPIMAGE}" \; || true
+          find target -path '*bundle/deb/*.deb' -exec cp {} "dist/${LINUX_DEB}" \; || true
           ls -la dist/
+
+      # ── macOS: notarize + staple + verify (fail-closed) ────────────
+      - name: Notarize and verify (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          DMG="dist/${MACOS_ASSET}"
+          test -f "$DMG" || { echo "::error::dmg missing"; exit 1; }
+          APP=$(find target -name '*.app' -maxdepth 6 | head -1)
+          test -n "$APP" || { echo "::error::app bundle missing"; exit 1; }
+          codesign -v --deep --strict "$APP"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          echo "macOS: signed, notarized, stapled ✓"
+
+      # ── Windows: Authenticode sign + verify (fail-closed) ──────────
+      - name: Sign and verify (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PWD: ${{ secrets.WINDOWS_CERT_PWD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+          $exe = "dist/${env:WINDOWS_ASSET}"
+          if (-not (Test-Path $exe)) { Write-Host "::error::exe missing"; exit 1 }
+          signtool sign /f "$env:TEMP\cert.pfx" /p "$env:WINDOWS_CERT_PWD" `
+            /tr http://timestamp.digicert.com /fd sha256 /td sha256 $exe
+          signtool verify /pa /all $exe
+          Remove-Item "$env:TEMP\cert.pfx"
+          Write-Host "Windows: Authenticode signed ✓"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -73,22 +179,59 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail-closed gate — all signing secrets must exist
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PWD: ${{ secrets.WINDOWS_CERT_PWD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in APPLE_CERTIFICATE_P12 APPLE_SIGNING_IDENTITY APPLE_ID \
+                   APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID \
+                   WINDOWS_CERT_PFX WINDOWS_CERT_PWD; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::release blocked: secret $v is not set (no unsigned releases)"
+              missing=1
+            fi
+          done
+          exit $missing
+
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
           path: dist
 
+      - name: Fail-closed gate — every contract asset must exist
+        run: |
+          set -euo pipefail
+          for f in "${MACOS_ASSET}" "${WINDOWS_ASSET}" "${LINUX_APPIMAGE}" "${LINUX_DEB}"; do
+            test -f "dist/$f" || { echo "::error::release blocked: $f missing (§24: publish only tested artifacts)"; exit 1; }
+          done
+
       - name: Checksums
         working-directory: dist
         run: |
           rm -f sha256sums.txt
-          shasum -a 256 * > sha256sums.txt || sha256sum * > sha256sums.txt
+          shasum -a 256 "${MACOS_ASSET}" "${WINDOWS_ASSET}" "${LINUX_APPIMAGE}" "${LINUX_DEB}" > sha256sums.txt
           cat sha256sums.txt
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*
+            dist/${{ env.MACOS_ASSET }}
+            dist/${{ env.WINDOWS_ASSET }}
+            dist/${{ env.LINUX_APPIMAGE }}
+            dist/${{ env.LINUX_DEB }}
+            dist/sha256sums.txt
           generate_release_notes: true
