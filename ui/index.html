@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stria</title>
   <style>
-    /* Launcher first-run: obsidian + sage, matching the machine-room page
-       that sent the user here. No framework — this ships inside the binary. */
     * { box-sizing: border-box; margin: 0; }
     body {
       font-family: -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
@@ -14,15 +12,16 @@
       color: #e8f4ec;
       min-height: 100vh;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
+      padding: 40px 20px;
     }
     .card {
-      width: min(560px, 90vw);
+      width: min(640px, 94vw);
       border: 1px solid rgba(126, 232, 176, 0.16);
       border-radius: 16px;
       background: rgba(18, 30, 22, 0.72);
-      padding: 36px 32px;
+      padding: 32px;
       box-shadow: 0 24px 56px -32px rgba(0, 0, 0, 0.6);
     }
     .eyebrow {
@@ -31,11 +30,12 @@
       letter-spacing: 0.14em;
       text-transform: uppercase;
       font-weight: 600;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
-    h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; color: #f2f9f4; }
-    .sub { color: rgba(232, 244, 236, 0.64); font-size: 14px; line-height: 1.55; margin-bottom: 24px; }
-    label { display: block; font-size: 12.5px; color: rgba(232,244,236,0.7); margin: 14px 0 6px; }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; color: #f2f9f4; }
+    h2 { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #f2f9f4; }
+    .sub { color: rgba(232, 244, 236, 0.64); font-size: 13px; line-height: 1.55; margin-bottom: 20px; }
+    label { display: block; font-size: 12px; color: rgba(232,244,236,0.7); margin: 12px 0 4px; }
     input {
       width: 100%;
       background: rgba(5, 11, 7, 0.7);
@@ -43,36 +43,104 @@
       border-radius: 10px;
       color: #f2f9f4;
       font-size: 14px;
-      padding: 11px 14px;
+      padding: 10px 12px;
       outline: none;
     }
     input:focus { border-color: rgba(126, 232, 176, 0.5); }
     button {
       width: 100%;
-      margin-top: 22px;
+      margin-top: 16px;
       background: #7ee8b0;
       border: none;
       border-radius: 10px;
       color: #06130b;
       font-size: 14px;
       font-weight: 600;
-      padding: 12px;
+      padding: 11px;
       cursor: pointer;
     }
     button:hover { background: #93f0c2; }
-    .status { margin-top: 16px; font-size: 13px; color: #7ee8b0; min-height: 18px; }
+    button.secondary {
+      background: transparent;
+      border: 1px solid rgba(126, 232, 176, 0.3);
+      color: #7ee8b0;
+    }
+    button.secondary:hover { background: rgba(126, 232, 176, 0.08); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .status { margin-top: 12px; font-size: 12.5px; color: #7ee8b0; min-height: 16px; }
     .status.err { color: #f0a0a0; }
     .pairing {
-      margin-top: 20px; border-top: 1px solid rgba(126,232,176,0.1); padding-top: 18px;
+      margin-top: 18px;
+      border-top: 1px solid rgba(126,232,176,0.1);
+      padding-top: 16px;
     }
     code {
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 15px; letter-spacing: 0.08em; color: #7ee8b0;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      color: #7ee8b0;
     }
+    /* Software hub */
+    #hub { display: none; }
+    .pkg {
+      border: 1px solid rgba(126, 232, 176, 0.12);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .pkg-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .pkg-name { font-weight: 600; font-size: 14px; }
+    .pkg-ver { font-size: 12px; color: rgba(232,244,236,0.5); font-family: ui-monospace, monospace; }
+    .pkg-status {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    .pkg-status.ok { background: rgba(126,232,176,0.15); color: #7ee8b0; }
+    .pkg-status.update { background: rgba(255,180,80,0.15); color: #f0b060; }
+    .pkg-status.missing { background: rgba(240,120,120,0.15); color: #f0a0a0; }
+    .pkg-action {
+      margin-top: 8px;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: rgba(126,232,176,0.1);
+      border: 1px solid rgba(126,232,176,0.2);
+      color: #7ee8b0;
+      cursor: pointer;
+    }
+    .pkg-action:hover { background: rgba(126,232,176,0.2); }
+    .pkg-action:disabled { opacity: 0.4; cursor: not-allowed; }
+    .progress {
+      margin-top: 8px;
+      height: 4px;
+      background: rgba(126,232,176,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #7ee8b0;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .hub-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .hub-actions button { margin-top: 0; }
   </style>
 </head>
 <body>
-  <div class="card">
+  <!-- Registration + pairing view -->
+  <div class="card" id="setup">
     <p class="eyebrow">Stria Launcher</p>
     <h1>Set up your workspace.</h1>
     <p class="sub">
@@ -95,12 +163,33 @@
       <p class="status" id="status"></p>
     </div>
   </div>
+
+  <!-- Software hub view (shown after pairing) -->
+  <div class="card" id="hub">
+    <p class="eyebrow">Stria Software Hub</p>
+    <h1 id="hub-title">Your workspace software.</h1>
+    <p class="sub" id="hub-sub">Checking for updates…</p>
+    <div id="pkg-list"></div>
+    <div class="hub-actions">
+      <button class="secondary" id="check-btn">Check for updates</button>
+      <button id="install-all-btn">Install all updates</button>
+    </div>
+    <p class="status" id="hub-status"></p>
+  </div>
+
   <script>
     const status = (msg, err) => {
       const el = document.getElementById("status");
       el.textContent = msg;
       el.className = "status" + (err ? " err" : "");
     };
+    const hubStatus = (msg, err) => {
+      const el = document.getElementById("hub-status");
+      el.textContent = msg;
+      el.className = "status" + (err ? " err" : "");
+    };
+
+    // Registration
     document.getElementById("reg").addEventListener("submit", async (e) => {
       e.preventDefault();
       status("Creating your workspace…");
@@ -115,47 +204,95 @@
         status(String(err), true);
       }
     });
+
+    // Pairing
     document.getElementById("code").addEventListener("change", async (e) => {
       const code = e.target.value.trim();
       if (!/^[A-Z2-9]{3}-[A-Z2-9]{3}-[A-Z2-9]{3}$/.test(code)) return;
       status("Pairing this machine…");
       try {
         const token = await window.__TAURI__.core.invoke("pair_machine", { pairingCode: code });
-        status("Paired. Fetching your Stria suite…");
-        await installSuite();
+        status("Paired. Loading software hub…");
+        document.getElementById("setup").style.display = "none";
+        document.getElementById("hub").style.display = "block";
+        await loadHub();
       } catch (err) {
         status(String(err), true);
       }
     });
 
-    async function installSuite() {
-      // 1. Entitlement-gated manifest from the portal.
-      const manifest = JSON.parse(await window.__TAURI__.core.invoke("fetch_suite_manifest"));
-      if (!manifest.entitled) {
-        status(`Suite locked (${manifest.reason ?? manifest.state}). Verify your email at portal.striasystems.com to unlock.`, true);
-        return;
+    async function loadHub() {
+      hubStatus("Checking for updates…");
+      try {
+        // Check for updates from the portal
+        const updateJson = await window.__TAURI__.core.invoke("fetch_software_updates");
+        const data = JSON.parse(updateJson);
+
+        document.getElementById("hub-title").textContent =
+          data.up_to_date ? "Your workspace software is up to date." : "Updates available.";
+        document.getElementById("hub-sub").textContent =
+          `${data.org_id} · ${data.up_to_date ? "All packages current" : data.updates.length + " package(s) need updating"}`;
+
+        const list = document.getElementById("pkg-list");
+        list.innerHTML = "";
+
+        if (data.up_to_date) {
+          list.innerHTML = '<p class="sub">All Stria software is current. The launcher will check for updates automatically.</p>';
+          hubStatus("All packages up to date.");
+        } else {
+          for (const u of data.updates) {
+            const div = document.createElement("div");
+            div.className = "pkg";
+            div.innerHTML = `
+              <div class="pkg-head">
+                <span class="pkg-name">${u.package_id}</span>
+                <span class="pkg-status update">Update available</span>
+              </div>
+              <div class="pkg-ver">${u.current_version ?? "not installed"} → ${u.target_version}</div>
+              <div class="pkg-action" data-pkg="${u.package_id}" data-url="${u.assets[0]?.url ?? ""}" data-sha="${u.assets[0]?.sha256 ?? ""}">Install update</div>
+              <div class="progress"><div class="progress-bar" id="prog-${u.package_id}"></div></div>
+            `;
+            list.appendChild(div);
+          }
+          // Bind install buttons
+          list.querySelectorAll(".pkg-action").forEach(btn => {
+            btn.addEventListener("click", async () => {
+              const pkg = btn.dataset.pkg;
+              const url = btn.dataset.url;
+              const sha = btn.dataset.sha;
+              if (!url) { hubStatus(`No asset for this platform for ${pkg}`, true); return; }
+              btn.disabled = true;
+              hubStatus(`Installing ${pkg}…`);
+              try {
+                const path = await window.__TAURI__.core.invoke("download_suite_asset", { url, expectedSha256: sha });
+                hubStatus(`Installed ${pkg} → ${path}`);
+                btn.textContent = "Installed ✓";
+                btn.className = "pkg-action";
+                btn.style.background = "rgba(126,232,176,0.2)";
+              } catch (err) {
+                hubStatus(`Failed to install ${pkg}: ${err}`, true);
+                btn.disabled = false;
+              }
+            });
+          });
+          hubStatus(`${data.updates.length} update(s) available. Click each to install.`);
+        }
+
+        // Report installed versions back to portal
+        await window.__TAURI__.core.invoke("report_software_versions");
+      } catch (err) {
+        hubStatus(`Could not load software hub: ${err}`, true);
       }
-      if (!manifest.release || !Array.isArray(manifest.release.assets)) {
-        status("No signed release published yet. You are paired — the suite unlocks the moment v0.1.0 publishes.", true);
-        return;
-      }
-      // 2. Pick this platform's asset + the checksums file.
-      const plat = await window.__TAURI__.core.invoke("platform_name");
-      const arch = await window.__TAURI__.core.invoke("arch_name");
-      const want = manifest.release.assets.find((a) => a.platform === plat && a.arch === (plat === "macos" ? "arm64" : a.arch));
-      if (!want) { status("No signed asset for this platform yet.", true); return; }
-      const sums = manifest.release.assets.find((a) => a.name === "sha256sums.txt");
-      if (!sums) { status("Release is missing sha256sums.txt — refusing unsigned install.", true); return; }
-      // 3. Download checksums, extract the expected digest for this asset.
-      const sumsText = await window.__TAURI__.core.invoke("download_text", { url: sums.url });
-      const line = sumsText.split("\n").find((l) => l.includes(want.name));
-      const expected = line ? line.trim().split(/\s+/)[0] : "";
-      if (!/^[0-9a-f]{64}$/i.test(expected)) { status("Checksum file unreadable — refusing install.", true); return; }
-      // 4. Download + verify + install.
-      status(`Downloading ${want.name}…`);
-      const path = await window.__TAURI__.core.invoke("download_suite_asset", { url: want.url, expectedSha256: expected });
-      status(`Verified + installed: ${path.split("/").pop()}. Launching…`);
     }
+
+    document.getElementById("check-btn").addEventListener("click", loadHub);
+    document.getElementById("install-all-btn").addEventListener("click", async () => {
+      const btns = document.querySelectorAll(".pkg-action[data-pkg]");
+      for (const btn of btns) {
+        if (!btn.disabled && btn.dataset.url) btn.click();
+        await new Promise(r => setTimeout(r, 500));
+      }
+    });
   </script>
 </body>
 </html>
