@@ -5,9 +5,10 @@
  *   1. register_workspace  — POST /api/auth/register on the portal
  *   2. pair_machine        — POST /api/portal/ingest with the pairing code;
  *                            the one-time exchange returns a machine token
- *                            which the UI stores (keychain lands with the
- *                            per-OS installer work)
- *   3. launch_works        — hand off to the installed Stria Works app
+ *                            and the launcher persists ~/.stria/portal.json
+ *                            (the CLI + Stria Works read the same file)
+ *   3. fetch_suite_manifest — entitlement-gated downloads manifest
+ *   4. launch_works        — hand off to the installed Stria Works app
  *
  * The pairing endpoint contract mirrors the portal: single-use code,
  * AAA-BBB-CCC format, 15-minute expiry. The ingest call records platform,
@@ -36,6 +37,8 @@ fn machine_id() -> String {
     format!("stria-{}", &digest[..16])
 }
 
+/// Platform helper, also exposed to the UI for asset selection.
+#[tauri::command]
 fn platform_name() -> String {
     match std::env::consts::OS {
         "macos" => "macos".into(),
@@ -44,6 +47,8 @@ fn platform_name() -> String {
     }
 }
 
+/// Arch helper, also exposed to the UI for asset selection.
+#[tauri::command]
 fn arch_name() -> String {
     match std::env::consts::ARCH {
         "aarch64" => "arm64".into(),
@@ -120,14 +125,16 @@ async fn mint_pairing_code() -> Result<String, String> {
 
 /// Exchange the user's pairing code for a long-lived machine token.
 /// The first ingest call both pairs the machine and registers it in the
-/// portal (platform, arch, launcher version, last_seen).
+/// portal (platform, arch, launcher version, last_seen). The pairing record
+/// is persisted to ~/.stria/portal.json — the same file the CLI's
+/// loadPairing() reads, so launcher and CLI share one pairing contract.
 #[tauri::command]
 async fn pair_machine(pairing_code: String) -> Result<String, String> {
     let res = client()?
         .post(format!("{PORTAL_ORIGIN}/api/portal/ingest"))
         .bearer_auth(&pairing_code)
         .json(&serde_json::json!({
-            "organization_id": "default",
+            "organization_id": "",
             "team_id": "default",
             "machine_id": machine_id(),
             "objective": "launcher pairing",
@@ -144,9 +151,124 @@ async fn pair_machine(pairing_code: String) -> Result<String, String> {
     let text = res.text().await.unwrap_or_default();
     let parsed: IngestResponse = serde_json::from_str(&text)
         .map_err(|_| "Portal returned an unreadable response.".to_string())?;
-    parsed.machine_token.ok_or_else(|| {
+    let token = parsed.machine_token.ok_or_else(|| {
         portal_error(&text, "Pairing failed. Check the code and try again.")
-    })
+    })?;
+    persist_pairing(&token)?;
+    Ok(token)
+}
+
+/// Persist ~/.stria/portal.json. Shape matches apps/cli/src/portal/store.ts
+/// (PORTAL_CONFIG) so Stria Works, the CLI, and the launcher all read one
+/// pairing truth. Token lives on disk with user-only permissions.
+fn persist_pairing(machine_token: &str) -> Result<(), String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    if home.is_empty() {
+        return Err("Cannot resolve home directory.".to_string());
+    }
+    let dir = std::path::Path::new(&home).join(".stria");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir ~/.stria: {e}"))?;
+    let record = serde_json::json!({
+        "portalUrl": PORTAL_ORIGIN,
+        "machineId": machine_id(),
+        "machineToken": machine_token,
+        "teamId": "team_default",
+        "platform": platform_name(),
+        "arch": arch_name(),
+        "launcherVersion": env!("CARGO_PKG_VERSION"),
+        "pairedAt": chrono_now_rfc3339(),
+    });
+    let path = dir.join("portal.json");
+    std::fs::write(&path, serde_json::to_string_pretty(&record).unwrap_or_default() + "\n")
+        .map_err(|e| format!("write portal.json: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+fn read_pairing_token() -> Result<String, String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let path = std::path::Path::new(&home).join(".stria").join("portal.json");
+    let raw = std::fs::read_to_string(&path).map_err(|_| "Not paired.".to_string())?;
+    let v: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|_| "~/.stria/portal.json is corrupt.".to_string())?;
+    let t = v
+        .get("machineToken")
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_string();
+    if t.is_empty() {
+        return Err("Not paired.".to_string());
+    }
+    Ok(t)
+}
+
+/// Entitlement-gated suite manifest: the portal decides what this machine
+/// may download (Stria Works + Stria-Pi assets for this platform). Returns
+/// the raw JSON so the UI can render states (restricted / entitled / assets).
+#[tauri::command]
+async fn fetch_suite_manifest() -> Result<String, String> {
+    let token = read_pairing_token()?;
+    let res = client()?
+        .get(format!("{PORTAL_ORIGIN}/api/portal/downloads"))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    let text = res.text().await.unwrap_or_default();
+    // Non-200 (403 restricted etc.) still returns the JSON body: the UI
+    // needs {state, reason} to guide the user, not a thrown error.
+    Ok(text)
+}
+
+/// Download the given asset URL to ~/Downloads (or app dir) and verify its
+/// SHA-256 against the portal manifest's sha256sums.txt. streams to disk.
+#[tauri::command]
+async fn download_suite_asset(url: String, expected_sha256: String) -> Result<String, String> {
+    let res = client()?
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Download failed: {e}"))?;
+    if !res.status().is_success() {
+        return Err(format!("Download failed: HTTP {}", res.status()));
+    }
+    let bytes = res
+        .bytes()
+        .await
+        .map_err(|e| format!("Download failed: {e}"))?;
+    let mut h = Sha256::new();
+    h.update(&bytes);
+    let digest = hex::encode(h.finalize());
+    if !digest.eq_ignore_ascii_case(&expected_sha256) {
+        return Err(format!(
+            "Checksum mismatch: expected {expected_sha256}, got {digest}"
+        ));
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    let dir = std::path::Path::new(&home).join(".stria").join("suite");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir suite dir: {e}"))?;
+    let file_name = url.rsplit('/').next().unwrap_or("stria-suite.bin");
+    let path = dir.join(file_name);
+    std::fs::write(&path, &bytes).map_err(|e| format!("write asset: {e}"))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Small text fetch (checksums files). Refuses non-2xx.
+#[tauri::command]
+async fn download_text(url: String) -> Result<String, String> {
+    let res = client()?
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Download failed: {e}"))?;
+    if !res.status().is_success() {
+        return Err(format!("Download failed: HTTP {}", res.status()));
+    }
+    res.text().await.map_err(|e| format!("Read failed: {e}"))
 }
 
 /// RFC3339 timestamp without pulling chrono into the bundle.
@@ -165,10 +287,15 @@ fn chrono_now_rfc3339() -> String {
     let y = yoe + era * 400;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
-    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", secs / 3600, (secs % 3600) / 60, secs % 60)
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        secs / 3600,
+        (secs % 3600) / 60,
+        secs % 60
+    )
 }
 
 fn main() {
@@ -176,7 +303,12 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             register_workspace,
             mint_pairing_code,
-            pair_machine
+            pair_machine,
+            fetch_suite_manifest,
+            download_suite_asset,
+            download_text,
+            platform_name,
+            arch_name
         ])
         .run(tauri::generate_context!())
         .expect("error while running stria launcher");

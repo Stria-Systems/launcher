@@ -121,11 +121,41 @@
       status("Pairing this machine…");
       try {
         const token = await window.__TAURI__.core.invoke("pair_machine", { pairingCode: code });
-        status("Paired. Launching Stria Works…");
+        status("Paired. Fetching your Stria suite…");
+        await installSuite();
       } catch (err) {
         status(String(err), true);
       }
     });
+
+    async function installSuite() {
+      // 1. Entitlement-gated manifest from the portal.
+      const manifest = JSON.parse(await window.__TAURI__.core.invoke("fetch_suite_manifest"));
+      if (!manifest.entitled) {
+        status(`Suite locked: ${manifest.reason ?? manifest.state}. Verify your email at portal.striasystems.com.`, true);
+        return;
+      }
+      if (!manifest.release || !Array.isArray(manifest.release.assets)) {
+        status("No signed release published yet. You are paired — the suite unlocks the moment v0.1.0 publishes.", true);
+        return;
+      }
+      // 2. Pick this platform's asset + the checksums file.
+      const plat = await window.__TAURI__.core.invoke("platform_name");
+      const arch = await window.__TAURI__.core.invoke("arch_name");
+      const want = manifest.release.assets.find((a) => a.platform === plat && a.arch === (plat === "macos" ? "arm64" : a.arch));
+      if (!want) { status("No signed asset for this platform yet.", true); return; }
+      const sums = manifest.release.assets.find((a) => a.name === "sha256sums.txt");
+      if (!sums) { status("Release is missing sha256sums.txt — refusing unsigned install.", true); return; }
+      // 3. Download checksums, extract the expected digest for this asset.
+      const sumsText = await window.__TAURI__.core.invoke("download_text", { url: sums.url });
+      const line = sumsText.split("\n").find((l) => l.includes(want.name));
+      const expected = line ? line.trim().split(/\s+/)[0] : "";
+      if (!/^[0-9a-f]{64}$/i.test(expected)) { status("Checksum file unreadable — refusing install.", true); return; }
+      // 4. Download + verify + install.
+      status(`Downloading ${want.name}…`);
+      const path = await window.__TAURI__.core.invoke("download_suite_asset", { url: want.url, expectedSha256: expected });
+      status(`Verified + installed: ${path.split("/").pop()}. Launching…`);
+    }
   </script>
 </body>
 </html>
