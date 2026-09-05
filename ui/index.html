@@ -132,7 +132,7 @@
       // 1. Entitlement-gated manifest from the portal.
       const manifest = JSON.parse(await window.__TAURI__.core.invoke("fetch_suite_manifest"));
       if (!manifest.entitled) {
-        status(`Suite locked: ${manifest.reason ?? manifest.state}. Verify your email at portal.striasystems.com.`, true);
+        status(`Suite locked (${manifest.reason ?? manifest.state}). Verify your email at portal.striasystems.com to unlock.`, true);
         return;
       }
       if (!manifest.release || !Array.isArray(manifest.release.assets)) {
