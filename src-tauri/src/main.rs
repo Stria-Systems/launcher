@@ -251,26 +251,20 @@ async fn download_text(url: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn report_software_versions() -> Result<(), String> {
+async fn report_software_versions(
+    packages: serde_json::Value,
+) -> Result<(), String> {
     let token = read_pairing_token()?;
-    let home = std::env::var("HOME").unwrap_or_default();
-    let suite_dir = std::path::Path::new(&home).join(".stria").join("suite");
-    let mut packages = serde_json::json!({});
+    let mut report = serde_json::json!({});
     // Always report launcher version
-    packages["stria-launcher"] = serde_json::json!(env!("CARGO_PKG_VERSION"));
-    // Detect other installed packages from suite directory
-    if suite_dir.exists() {
-        for entry in std::fs::read_dir(&suite_dir).map_err(|e| format!("read suite dir: {e}"))? {
-            let entry = entry.map_err(|e| format!("read entry: {e}"))?;
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with("Stria-Works") || name.starts_with("stria-works") {
-                packages["stria-works"] = serde_json::json!(env!("CARGO_PKG_VERSION"));
-            } else if name.starts_with("Stria-Pi") || name.starts_with("stria-pi") {
-                packages["stria-pi"] = serde_json::json!(env!("CARGO_PKG_VERSION"));
-            }
+    report["stria-launcher"] = serde_json::json!(env!("CARGO_PKG_VERSION"));
+    // Merge caller-supplied package versions (from JS after download)
+    if let Some(obj) = packages.as_object() {
+        for (k, v) in obj {
+            report[k] = v.clone();
         }
     }
-    let body = serde_json::json!({ "packages": packages });
+    let body = serde_json::json!({ "packages": report });
     let res = client()?
         .post(format!("{PORTAL_ORIGIN}/api/portal/software"))
         .header("Authorization", format!("Bearer {token}"))

@@ -13,8 +13,11 @@
         "title": "Stria",
         "width": 760,
         "height": 560,
+        "minWidth": 380,
+        "minHeight": 320,
         "resizable": true,
-        "center": true
+        "center": true,
+        "fullscreen": false
       }
     ],
     "security": {

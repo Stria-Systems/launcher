@@ -3,139 +3,195 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stria</title>
+  <title>Stria Launcher</title>
   <style>
-    * { box-sizing: border-box; margin: 0; }
+    :root {
+      --bg: #0a120d;
+      --bg-grad: linear-gradient(160deg, #0a120d 0%, #08100b 60%, #0c1610 100%);
+      --card: rgba(18, 30, 22, 0.72);
+      --border: rgba(126, 232, 176, 0.16);
+      --border-bright: rgba(126, 232, 176, 0.5);
+      --mint: #7ee8b0;
+      --mint-bright: #93f0c2;
+      --text: #e8f4ec;
+      --text-dim: rgba(232, 244, 236, 0.64);
+      --text-faint: rgba(232, 244, 236, 0.4);
+      --error: #f0a0a0;
+      --warn: #f0b060;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --sans: -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
     body {
-      font-family: -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
-      background: linear-gradient(160deg, #0a120d 0%, #08100b 60%, #0c1610 100%);
-      color: #e8f4ec;
-      min-height: 100vh;
+      font-family: var(--sans);
+      background: var(--bg-grad);
+      color: var(--text);
       display: flex;
-      align-items: flex-start;
+      align-items: stretch;
       justify-content: center;
-      padding: 40px 20px;
     }
     .card {
-      width: min(640px, 94vw);
-      border: 1px solid rgba(126, 232, 176, 0.16);
-      border-radius: 16px;
-      background: rgba(18, 30, 22, 0.72);
-      padding: 32px;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      max-width: 720px;
+      border: 1px solid var(--border);
+      border-radius: 0;
+      background: var(--card);
+      padding: clamp(20px, 5vw, 48px) clamp(16px, 4vw, 40px);
       box-shadow: 0 24px 56px -32px rgba(0, 0, 0, 0.6);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
     }
     .eyebrow {
-      color: #7ee8b0;
-      font-size: 11px;
+      color: var(--mint);
+      font-size: clamp(9px, 1.8vw, 11px);
       letter-spacing: 0.14em;
       text-transform: uppercase;
       font-weight: 600;
-      margin-bottom: 8px;
+      margin-bottom: clamp(4px, 1vw, 8px);
     }
-    h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; color: #f2f9f4; }
-    h2 { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #f2f9f4; }
-    .sub { color: rgba(232, 244, 236, 0.64); font-size: 13px; line-height: 1.55; margin-bottom: 20px; }
-    label { display: block; font-size: 12px; color: rgba(232,244,236,0.7); margin: 12px 0 4px; }
+    h1 {
+      font-size: clamp(17px, 3.5vw, 24px);
+      font-weight: 600;
+      margin-bottom: clamp(4px, 0.8vw, 6px);
+      color: #f2f9f4;
+    }
+    h2 {
+      font-size: clamp(13px, 2.5vw, 16px);
+      font-weight: 600;
+      margin-bottom: clamp(3px, 0.6vw, 6px);
+      color: #f2f9f4;
+    }
+    .sub {
+      color: var(--text-dim);
+      font-size: clamp(11px, 2.2vw, 14px);
+      line-height: 1.55;
+      margin-bottom: clamp(12px, 2.5vw, 20px);
+    }
+    .sub-faint { color: var(--text-faint); font-size: clamp(10px, 1.8vw, 12px); line-height: 1.5; }
+    label {
+      display: block;
+      font-size: clamp(10px, 1.8vw, 12px);
+      color: rgba(232,244,236,0.7);
+      margin: clamp(8px, 1.5vw, 12px) 0 clamp(2px, 0.5vw, 4px);
+    }
     input {
       width: 100%;
       background: rgba(5, 11, 7, 0.7);
-      border: 1px solid rgba(126, 232, 176, 0.16);
+      border: 1px solid var(--border);
       border-radius: 10px;
       color: #f2f9f4;
-      font-size: 14px;
-      padding: 10px 12px;
+      font-size: clamp(12px, 2.2vw, 14px);
+      padding: clamp(8px, 1.5vw, 12px) clamp(10px, 1.8vw, 14px);
       outline: none;
+      font-family: var(--sans);
     }
-    input:focus { border-color: rgba(126, 232, 176, 0.5); }
+    input:focus { border-color: var(--border-bright); }
     button {
       width: 100%;
-      margin-top: 16px;
-      background: #7ee8b0;
+      margin-top: clamp(10px, 2vw, 16px);
+      background: var(--mint);
       border: none;
       border-radius: 10px;
       color: #06130b;
-      font-size: 14px;
+      font-size: clamp(12px, 2.2vw, 14px);
       font-weight: 600;
-      padding: 11px;
+      padding: clamp(9px, 1.8vw, 13px);
       cursor: pointer;
+      font-family: var(--sans);
     }
-    button:hover { background: #93f0c2; }
+    button:hover { background: var(--mint-bright); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
     button.secondary {
       background: transparent;
       border: 1px solid rgba(126, 232, 176, 0.3);
-      color: #7ee8b0;
+      color: var(--mint);
     }
     button.secondary:hover { background: rgba(126, 232, 176, 0.08); }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-    .status { margin-top: 12px; font-size: 12.5px; color: #7ee8b0; min-height: 16px; }
-    .status.err { color: #f0a0a0; }
+    .status {
+      margin-top: clamp(8px, 1.5vw, 12px);
+      font-size: clamp(10px, 2vw, 13px);
+      color: var(--mint);
+      min-height: clamp(14px, 2.5vw, 18px);
+    }
+    .status.err { color: var(--error); }
+    .status.warn { color: var(--warn); }
     .pairing {
-      margin-top: 18px;
+      margin-top: clamp(12px, 2.5vw, 20px);
       border-top: 1px solid rgba(126,232,176,0.1);
-      padding-top: 16px;
+      padding-top: clamp(10px, 2vw, 16px);
     }
     code {
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 14px;
+      font-family: var(--mono);
+      font-size: clamp(12px, 2.2vw, 14px);
       letter-spacing: 0.08em;
-      color: #7ee8b0;
+      color: var(--mint);
     }
     /* Software hub */
     #hub { display: none; }
     .pkg {
       border: 1px solid rgba(126, 232, 176, 0.12);
-      border-radius: 10px;
-      padding: 14px;
-      margin-bottom: 10px;
+      border-radius: 12px;
+      padding: clamp(10px, 2vw, 16px);
+      margin-bottom: clamp(6px, 1.2vw, 10px);
+      background: rgba(126, 232, 176, 0.02);
     }
     .pkg-head {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 4px;
+      align-items: flex-start;
+      margin-bottom: clamp(2px, 0.5vw, 4px);
+      gap: 8px;
     }
-    .pkg-name { font-weight: 600; font-size: 14px; }
-    .pkg-ver { font-size: 12px; color: rgba(232,244,236,0.5); font-family: ui-monospace, monospace; }
+    .pkg-name { font-weight: 600; font-size: clamp(12px, 2.2vw, 14px); }
+    .pkg-desc { font-size: clamp(10px, 1.8vw, 12px); color: var(--text-faint); margin-bottom: clamp(4px, 1vw, 8px); }
     .pkg-status {
-      font-size: 11px;
+      font-size: clamp(8px, 1.5vw, 10px);
       padding: 3px 8px;
       border-radius: 6px;
-      font-weight: 500;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .pkg-status.ok { background: rgba(126,232,176,0.15); color: #7ee8b0; }
-    .pkg-status.update { background: rgba(255,180,80,0.15); color: #f0b060; }
-    .pkg-status.missing { background: rgba(240,120,120,0.15); color: #f0a0a0; }
-    .pkg-action {
-      margin-top: 8px;
-      font-size: 12px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      background: rgba(126,232,176,0.1);
-      border: 1px solid rgba(126,232,176,0.2);
-      color: #7ee8b0;
-      cursor: pointer;
+    .pkg-status.installed { background: rgba(126,232,176,0.15); color: var(--mint); }
+    .pkg-status.available { background: rgba(255,180,80,0.15); color: var(--warn); }
+    .pkg-status.pending { background: rgba(126,232,176,0.08); color: var(--text-faint); }
+    .pkg-meta {
+      font-size: clamp(9px, 1.6vw, 11px);
+      color: var(--text-faint);
+      font-family: var(--mono);
+      margin-bottom: clamp(4px, 1vw, 8px);
     }
-    .pkg-action:hover { background: rgba(126,232,176,0.2); }
-    .pkg-action:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pkg button { margin-top: 0; font-size: clamp(11px, 2vw, 13px); padding: clamp(6px, 1.2vw, 10px); }
+    .pkg-actions { display: flex; gap: clamp(4px, 0.8vw, 8px); margin-top: clamp(4px, 1vw, 8px); }
+    .pkg-actions button { flex: 1; }
     .progress {
-      margin-top: 8px;
-      height: 4px;
+      margin-top: clamp(4px, 1vw, 8px);
+      height: clamp(2px, 0.4vw, 4px);
       background: rgba(126,232,176,0.1);
       border-radius: 2px;
       overflow: hidden;
     }
-    .progress-bar {
-      height: 100%;
-      background: #7ee8b0;
-      width: 0%;
-      transition: width 0.3s;
-    }
+    .progress-bar { height: 100%; background: var(--mint); width: 0%; transition: width 0.3s; }
     .hub-actions {
       display: flex;
-      gap: 8px;
-      margin-top: 16px;
+      gap: clamp(6px, 1.2vw, 10px);
+      margin-top: clamp(10px, 2vw, 16px);
     }
     .hub-actions button { margin-top: 0; }
+    .empty-state { text-align: center; padding: clamp(12px, 3vw, 24px) 0; }
+    .empty-state .icon { font-size: clamp(20px, 4vw, 32px); margin-bottom: clamp(4px, 1vw, 8px); }
+    .empty-state .title { font-weight: 600; font-size: clamp(12px, 2.2vw, 14px); margin-bottom: clamp(2px, 0.5vw, 4px); }
+    .empty-state .desc { font-size: clamp(10px, 1.8vw, 12px); color: var(--text-faint); }
   </style>
 </head>
 <body>
@@ -144,9 +200,9 @@
     <p class="eyebrow">Stria Launcher</p>
     <h1>Set up your workspace.</h1>
     <p class="sub">
-      The launcher installs Stria Works and Stria-Pi, then pairs this machine
-      to your organization's portal. Your objectives, evidence, and costs live
-      at portal.striasystems.com.
+      The launcher installs and updates all Stria software on this machine —
+      Stria Works, Stria-Pi, and the Kestrel runtime. Your objectives, evidence,
+      and costs sync to portal.striasystems.com.
     </p>
     <form id="reg">
       <label for="email">Work email</label>
@@ -167,12 +223,12 @@
   <!-- Software hub view (shown after pairing) -->
   <div class="card" id="hub">
     <p class="eyebrow">Stria Software Hub</p>
-    <h1 id="hub-title">Your workspace software.</h1>
+    <h1 id="hub-title">Your software.</h1>
     <p class="sub" id="hub-sub">Checking for updates…</p>
     <div id="pkg-list"></div>
     <div class="hub-actions">
       <button class="secondary" id="check-btn">Check for updates</button>
-      <button id="install-all-btn">Install all updates</button>
+      <button id="install-all-btn" style="display:none">Install all</button>
     </div>
     <p class="status" id="hub-status"></p>
   </div>
@@ -183,11 +239,24 @@
       el.textContent = msg;
       el.className = "status" + (err ? " err" : "");
     };
-    const hubStatus = (msg, err) => {
+    const hubStatus = (msg, kind) => {
       const el = document.getElementById("hub-status");
       el.textContent = msg;
-      el.className = "status" + (err ? " err" : "");
+      el.className = "status" + (kind === "err" ? " err" : kind === "warn" ? " warn" : "");
     };
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    // Auto-paired: if ~/.stria/portal.json exists, skip to hub
+    (async () => {
+      try {
+        await window.__TAURI__.core.invoke("fetch_software_updates");
+        document.getElementById("setup").style.display = "none";
+        document.getElementById("hub").style.display = "block";
+        await loadHub();
+      } catch {
+        // Not paired — show setup
+      }
+    })();
 
     // Registration
     document.getElementById("reg").addEventListener("submit", async (e) => {
@@ -199,7 +268,7 @@
           organization: document.getElementById("org").value,
           password: document.getElementById("pass").value,
         });
-        status("Workspace created. Now pair this machine: open the portal, copy the pairing code, paste it below.");
+        status("Workspace created. Check your email for the verification link, then pair this machine.");
       } catch (err) {
         status(String(err), true);
       }
@@ -211,8 +280,9 @@
       if (!/^[A-Z2-9]{3}-[A-Z2-9]{3}-[A-Z2-9]{3}$/.test(code)) return;
       status("Pairing this machine…");
       try {
-        const token = await window.__TAURI__.core.invoke("pair_machine", { pairingCode: code });
+        await window.__TAURI__.core.invoke("pair_machine", { pairingCode: code });
         status("Paired. Loading software hub…");
+        await sleep(500);
         document.getElementById("setup").style.display = "none";
         document.getElementById("hub").style.display = "block";
         await loadHub();
@@ -224,62 +294,79 @@
     async function loadHub() {
       hubStatus("Checking for updates…");
       try {
-        // Check for updates from the portal
+        const platform = await window.__TAURI__.core.invoke("platform_name");
+        const arch = await window.__TAURI__.core.invoke("arch_name");
         const updateJson = await window.__TAURI__.core.invoke("fetch_software_updates");
         const data = JSON.parse(updateJson);
-
-        document.getElementById("hub-title").textContent =
-          data.up_to_date ? "Your workspace software is up to date." : "Updates available.";
-        document.getElementById("hub-sub").textContent =
-          `${data.org_id} · ${data.up_to_date ? "All packages current" : data.updates.length + " package(s) need updating"}`;
 
         const list = document.getElementById("pkg-list");
         list.innerHTML = "";
 
-        if (data.up_to_date) {
-          list.innerHTML = '<p class="sub">All Stria software is current. The launcher will check for updates automatically.</p>';
+        if (!data.updates || data.updates.length === 0) {
+          document.getElementById("hub-title").textContent = "Your software is up to date.";
+          document.getElementById("hub-sub").textContent = data.org_id;
+          list.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">✓</div>
+              <div class="title">All packages current</div>
+              <div class="desc">The launcher checks for updates automatically.</div>
+            </div>`;
           hubStatus("All packages up to date.");
+          document.getElementById("install-all-btn").style.display = "none";
         } else {
+          document.getElementById("hub-title").textContent = data.updates.length + " update available.";
+          document.getElementById("hub-sub").textContent = data.org_id;
+          document.getElementById("install-all-btn").style.display = "block";
+
           for (const u of data.updates) {
             const div = document.createElement("div");
             div.className = "pkg";
+            const asset = u.assets.find(a => a.platform === platform && a.arch === arch)
+                      || u.assets.find(a => a.platform === platform)
+                      || u.assets[0];
             div.innerHTML = `
               <div class="pkg-head">
                 <span class="pkg-name">${u.package_id}</span>
-                <span class="pkg-status update">Update available</span>
+                <span class="pkg-status available">Update</span>
               </div>
-              <div class="pkg-ver">${u.current_version ?? "not installed"} → ${u.target_version}</div>
-              <div class="pkg-action" data-pkg="${u.package_id}" data-url="${u.assets[0]?.url ?? ""}" data-sha="${u.assets[0]?.sha256 ?? ""}">Install update</div>
-              <div class="progress"><div class="progress-bar" id="prog-${u.package_id}"></div></div>
+              <div class="pkg-meta">${u.current_version ?? "not installed"} → ${u.target_version} · ${u.channel}</div>
+              <div class="pkg-actions">
+                <button class="secondary install-btn"${asset ? "" : " disabled"}>Install${asset ? " (" + formatSize(asset.size) + ")" : " (no build)"}</button>
+              </div>
+              <div class="progress"><div class="progress-bar"></div></div>
             `;
             list.appendChild(div);
-          }
-          // Bind install buttons
-          list.querySelectorAll(".pkg-action").forEach(btn => {
+            // Bind install
+            const btn = div.querySelector(".install-btn");
             btn.addEventListener("click", async () => {
-              const pkg = btn.dataset.pkg;
-              const url = btn.dataset.url;
-              const sha = btn.dataset.sha;
-              if (!url) { hubStatus(`No asset for this platform for ${pkg}`, true); return; }
+              if (!asset) { hubStatus(`No ${platform} build for ${u.package_id}`, true); return; }
+              btn.textContent = "Downloading…";
               btn.disabled = true;
-              hubStatus(`Installing ${pkg}…`);
               try {
-                const path = await window.__TAURI__.core.invoke("download_suite_asset", { url, expectedSha256: sha });
-                hubStatus(`Installed ${pkg} → ${path}`);
+                const path = await window.__TAURI__.core.invoke("download_suite_asset", { url: asset.url, expectedSha256: asset.sha256 });
                 btn.textContent = "Installed ✓";
-                btn.className = "pkg-action";
                 btn.style.background = "rgba(126,232,176,0.2)";
+                div.querySelector(".pkg-status").className = "pkg-status installed";
+                div.querySelector(".pkg-status").textContent = "Installed";
+                hubStatus(`Installed ${u.package_id} → ${path}`);
+                // Report back to portal
+                await window.__TAURI__.core.invoke("report_software_versions", {
+                  packages: { [u.package_id]: u.target_version }
+                }).catch(() => {});
               } catch (err) {
-                hubStatus(`Failed to install ${pkg}: ${err}`, true);
+                btn.textContent = "Retry install";
                 btn.disabled = false;
+                hubStatus(`Failed: ${err}`, true);
               }
             });
-          });
-          hubStatus(`${data.updates.length} update(s) available. Click each to install.`);
+          }
+          hubStatus(data.updates.length + " update(s) available.");
         }
 
-        // Report installed versions back to portal
-        await window.__TAURI__.core.invoke("report_software_versions");
+        // Report launcher version back to portal
+        await window.__TAURI__.core.invoke("report_software_versions", {
+          packages: {}
+        }).catch(() => {});
       } catch (err) {
         hubStatus(`Could not load software hub: ${err}`, true);
       }
@@ -287,12 +374,18 @@
 
     document.getElementById("check-btn").addEventListener("click", loadHub);
     document.getElementById("install-all-btn").addEventListener("click", async () => {
-      const btns = document.querySelectorAll(".pkg-action[data-pkg]");
+      const btns = document.querySelectorAll(".pkg-actions button");
       for (const btn of btns) {
-        if (!btn.disabled && btn.dataset.url) btn.click();
-        await new Promise(r => setTimeout(r, 500));
+        if (!btn.disabled && btn.textContent.includes("Install")) btn.click();
+        await sleep(400);
       }
     });
+
+    function formatSize(bytes) {
+      if (!bytes) return "";
+      if (bytes >= 1_000_000) return (bytes / 1_000_000).toFixed(1) + " MB";
+      return Math.round(bytes / 1024) + " KB";
+    }
   </script>
 </body>
 </html>
