@@ -192,18 +192,58 @@
     .empty-state .icon { font-size: clamp(20px, 4vw, 32px); margin-bottom: clamp(4px, 1vw, 8px); }
     .empty-state .title { font-weight: 600; font-size: clamp(12px, 2.2vw, 14px); margin-bottom: clamp(2px, 0.5vw, 4px); }
     .empty-state .desc { font-size: clamp(10px, 1.8vw, 12px); color: var(--text-faint); }
+    /* Auth tabs */
+    .auth-tabs {
+      display: flex;
+      gap: clamp(4px, 0.8vw, 8px);
+      margin-bottom: clamp(12px, 2.5vw, 20px);
+      border-bottom: 1px solid rgba(126, 232, 176, 0.12);
+      padding-bottom: clamp(4px, 0.8vw, 8px);
+    }
+    .auth-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: clamp(11px, 2vw, 13px);
+      font-weight: 500;
+      padding: clamp(6px, 1.2vw, 10px) clamp(10px, 2vw, 16px);
+      cursor: pointer;
+      border-radius: 8px 8px 0 0;
+      width: auto;
+      margin: 0;
+      flex: 1;
+      text-align: center;
+      transition: color 0.15s, background 0.15s;
+    }
+    .auth-tab:hover {
+      color: var(--text);
+      background: rgba(126, 232, 176, 0.04);
+    }
+    .auth-tab.active {
+      color: var(--mint);
+      background: rgba(126, 232, 176, 0.08);
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
   <!-- Registration + pairing view -->
   <div class="card" id="setup">
     <p class="eyebrow">Stria Launcher</p>
-    <h1>Set up your workspace.</h1>
-    <p class="sub">
+    <h1 id="auth-title">Set up your workspace.</h1>
+    <p class="sub" id="auth-sub">
       The launcher installs and updates all Stria software on this machine —
       Stria Works, Stria-Pi, and the Kestrel runtime. Your objectives, evidence,
       and costs sync to portal.striasystems.com.
     </p>
+
+    <!-- Tab toggle -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-create">Create workspace</button>
+      <button class="auth-tab" id="tab-signin">Sign in</button>
+    </div>
+
+    <!-- Create workspace form -->
     <form id="reg">
       <label for="email">Work email</label>
       <input id="email" type="email" autocomplete="email" required />
@@ -213,6 +253,16 @@
       <input id="pass" type="password" autocomplete="new-password" minlength="10" required />
       <button type="submit" id="submit">Create workspace</button>
     </form>
+
+    <!-- Sign in form (hidden by default) -->
+    <form id="signin-form" style="display:none">
+      <label for="login-email">Work email</label>
+      <input id="login-email" type="email" autocomplete="email" required />
+      <label for="login-pass">Password</label>
+      <input id="login-pass" type="password" autocomplete="current-password" required />
+      <button type="submit" id="login-submit">Sign in</button>
+    </form>
+
     <div class="pairing">
       <label for="code">Pairing code from the portal (AAA-BBB-CCC)</label>
       <input id="code" type="text" autocomplete="off" placeholder="AAA-BBB-CCC" />
@@ -258,6 +308,24 @@
       }
     })();
 
+    // Tab switching
+    document.getElementById("tab-create").addEventListener("click", () => {
+      document.getElementById("tab-create").classList.add("active");
+      document.getElementById("tab-signin").classList.remove("active");
+      document.getElementById("reg").style.display = "block";
+      document.getElementById("signin-form").style.display = "none";
+      document.getElementById("auth-title").textContent = "Set up your workspace.";
+      status("");
+    });
+    document.getElementById("tab-signin").addEventListener("click", () => {
+      document.getElementById("tab-signin").classList.add("active");
+      document.getElementById("tab-create").classList.remove("active");
+      document.getElementById("reg").style.display = "none";
+      document.getElementById("signin-form").style.display = "block";
+      document.getElementById("auth-title").textContent = "Sign in to your workspace.";
+      status("");
+    });
+
     // Registration
     document.getElementById("reg").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -269,6 +337,25 @@
           password: document.getElementById("pass").value,
         });
         status("Workspace created. Check your email for the verification link, then pair this machine.");
+      } catch (err) {
+        status(String(err), true);
+      }
+    });
+
+    // Sign in
+    document.getElementById("signin-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      status("Signing in…");
+      try {
+        await window.__TAURI__.core.invoke("sign_in", {
+          email: document.getElementById("login-email").value,
+          password: document.getElementById("login-pass").value,
+        });
+        status("Signed in. Loading software hub…");
+        await sleep(500);
+        document.getElementById("setup").style.display = "none";
+        document.getElementById("hub").style.display = "block";
+        await loadHub();
       } catch (err) {
         status(String(err), true);
       }

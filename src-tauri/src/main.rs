@@ -104,6 +104,46 @@ async fn register_workspace(
 }
 
 #[tauri::command]
+async fn sign_in(
+    email: String,
+    password: String,
+) -> Result<String, String> {
+    // 1. Login → session cookie
+    let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
+    let c = reqwest::Client::builder()
+        .cookie_provider(jar.clone())
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+    let res = c
+        .post(format!("{PORTAL_ORIGIN}/api/auth/login"))
+        .json(&serde_json::json!({
+            "email": email,
+            "password": password,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if !res.status().is_success() {
+        let text = res.text().await.unwrap_or_default();
+        return Err(portal_error(&text, "Invalid email or password."));
+    }
+    // 2. Mint pairing code (session cookie attached)
+    let pair_res = c
+        .post(format!("{PORTAL_ORIGIN}/api/auth/pairing"))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    let pair_text = pair_res.text().await.unwrap_or_default();
+    let parsed: PairingResponse = serde_json::from_str(&pair_text)
+        .map_err(|_| "Portal returned an unreadable response.".to_string())?;
+    let code = parsed.pairing_code.ok_or_else(|| {
+        portal_error(&pair_text, "Could not mint a pairing code. Sign in first.")
+    })?;
+    // 3. Exchange pairing code for machine token
+    pair_machine(code).await
+}
+
+#[tauri::command]
 async fn mint_pairing_code() -> Result<String, String> {
     let res = client()?
         .post(format!("{PORTAL_ORIGIN}/api/auth/pairing"))
@@ -307,6 +347,7 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             register_workspace,
+            sign_in,
             mint_pairing_code,
             pair_machine,
             fetch_software_updates,
