@@ -104,10 +104,7 @@ async fn register_workspace(
 }
 
 #[tauri::command]
-async fn sign_in(
-    email: String,
-    password: String,
-) -> Result<String, String> {
+async fn sign_in(email: String, password: String) -> Result<String, String> {
     // 1. Login → session cookie
     let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
     let c = reqwest::Client::builder()
@@ -136,9 +133,9 @@ async fn sign_in(
     let pair_text = pair_res.text().await.unwrap_or_default();
     let parsed: PairingResponse = serde_json::from_str(&pair_text)
         .map_err(|_| "Portal returned an unreadable response.".to_string())?;
-    let code = parsed.pairing_code.ok_or_else(|| {
-        portal_error(&pair_text, "Could not mint a pairing code. Sign in first.")
-    })?;
+    let code = parsed
+        .pairing_code
+        .ok_or_else(|| portal_error(&pair_text, "Could not mint a pairing code. Sign in first."))?;
     // 3. Exchange pairing code for machine token
     pair_machine(code).await
 }
@@ -181,9 +178,9 @@ async fn pair_machine(pairing_code: String) -> Result<String, String> {
     let text = res.text().await.unwrap_or_default();
     let parsed: IngestResponse = serde_json::from_str(&text)
         .map_err(|_| "Portal returned an unreadable response.".to_string())?;
-    let token = parsed.machine_token.ok_or_else(|| {
-        portal_error(&text, "Pairing failed. Check the code and try again.")
-    })?;
+    let token = parsed
+        .machine_token
+        .ok_or_else(|| portal_error(&text, "Pairing failed. Check the code and try again."))?;
     persist_pairing(&token)?;
     Ok(token)
 }
@@ -206,8 +203,11 @@ fn persist_pairing(machine_token: &str) -> Result<(), String> {
         "pairedAt": chrono_now_rfc3339(),
     });
     let path = dir.join("portal.json");
-    std::fs::write(&path, serde_json::to_string_pretty(&record).unwrap_or_default() + "\n")
-        .map_err(|e| format!("write portal.json: {e}"))?;
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&record).unwrap_or_default() + "\n",
+    )
+    .map_err(|e| format!("write portal.json: {e}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -218,7 +218,9 @@ fn persist_pairing(machine_token: &str) -> Result<(), String> {
 
 fn read_pairing_token() -> Result<String, String> {
     let home = std::env::var("HOME").unwrap_or_default();
-    let path = std::path::Path::new(&home).join(".stria").join("portal.json");
+    let path = std::path::Path::new(&home)
+        .join(".stria")
+        .join("portal.json");
     let raw = std::fs::read_to_string(&path).map_err(|_| "Not paired.".to_string())?;
     let v: serde_json::Value =
         serde_json::from_str(&raw).map_err(|_| "~/.stria/portal.json is corrupt.".to_string())?;
@@ -291,9 +293,7 @@ async fn download_text(url: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn report_software_versions(
-    packages: serde_json::Value,
-) -> Result<(), String> {
+async fn report_software_versions(packages: serde_json::Value) -> Result<(), String> {
     let token = read_pairing_token()?;
     let mut report = serde_json::json!({});
     // Always report launcher version

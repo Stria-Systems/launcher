@@ -1,0 +1,70 @@
+name: Launcher CI
+
+# Lightweight PR gate. The heavy 3-OS signed release matrix stays in
+# release.yml (tags only). This workflow gives every PR a fast signal
+# without secrets, signing, or bundling.
+#
+# Routing: this repo owns the Tauri launcher only. No website, portal,
+# or Works jobs belong here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: launcher-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: fmt · clippy · test · frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Linux deps (Tauri bundler headers)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-launcher-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-launcher-
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (warnings denied)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Frontend sanity (static UI, no build step)
+        working-directory: .
+        run: |
+          set -euo pipefail
+          test -f ui/index.html || { echo "::error::ui/index.html missing"; exit 1; }
+          test -f src-tauri/tauri.conf.json || { echo "::error::tauri.conf.json missing"; exit 1; }
+          echo "launcher frontend present ✓"
