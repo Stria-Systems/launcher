@@ -26,7 +26,7 @@ const PORTAL_ORIGIN: &str = "https://portal.striasystems.com";
 fn machine_id() -> String {
     let raw = format!(
         "{}|{}|{}",
-        std::env::var("USER").unwrap_or_default(),
+        username(),
         platform_name(),
         std::env::consts::ARCH
     );
@@ -56,8 +56,34 @@ fn arch_name() -> String {
 
 #[derive(Deserialize)]
 struct PairingResponse {
-    #[serde(default)]
-    pairing_code: Option<String>,
+    // Portal returns `{ ok, code, expiresAt }`. Accept the legacy
+    // `pairing_code` alias too so older portal builds keep working.
+    #[serde(default, alias = "pairing_code")]
+    code: Option<String>,
+}
+
+/// Resolve the user's home dir on every OS. `HOME` is unset in default
+/// Windows shells — fall back to `USERPROFILE` before giving up.
+fn home_dir() -> Result<std::path::PathBuf, String> {
+    for key in ["HOME", "USERPROFILE"] {
+        let v = std::env::var(key).unwrap_or_default();
+        if !v.trim().is_empty() {
+            return Ok(std::path::PathBuf::from(v));
+        }
+    }
+    Err("Cannot resolve home directory (HOME/USERPROFILE unset).".to_string())
+}
+
+/// Username for machine-id derivation. `USER` is unset on Windows —
+/// fall back to `USERNAME`.
+fn username() -> String {
+    for key in ["USER", "USERNAME"] {
+        let v = std::env::var(key).unwrap_or_default();
+        if !v.trim().is_empty() {
+            return v;
+        }
+    }
+    "unknown".to_string()
 }
 
 #[derive(Deserialize)]
@@ -134,7 +160,7 @@ async fn sign_in(email: String, password: String) -> Result<String, String> {
     let parsed: PairingResponse = serde_json::from_str(&pair_text)
         .map_err(|_| "Portal returned an unreadable response.".to_string())?;
     let code = parsed
-        .pairing_code
+        .code
         .ok_or_else(|| portal_error(&pair_text, "Could not mint a pairing code. Sign in first."))?;
     // 3. Exchange pairing code for machine token
     pair_machine(code).await
@@ -151,7 +177,7 @@ async fn mint_pairing_code() -> Result<String, String> {
     let parsed: PairingResponse = serde_json::from_str(&text)
         .map_err(|_| "Portal returned an unreadable response.".to_string())?;
     parsed
-        .pairing_code
+        .code
         .ok_or_else(|| portal_error(&text, "Could not mint a pairing code. Sign in first."))
 }
 
@@ -186,11 +212,7 @@ async fn pair_machine(pairing_code: String) -> Result<String, String> {
 }
 
 fn persist_pairing(machine_token: &str) -> Result<(), String> {
-    let home = std::env::var("HOME").unwrap_or_default();
-    if home.is_empty() {
-        return Err("Cannot resolve home directory.".to_string());
-    }
-    let dir = std::path::Path::new(&home).join(".stria");
+    let dir = home_dir()?.join(".stria");
     std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir ~/.stria: {e}"))?;
     let record = serde_json::json!({
         "portalUrl": PORTAL_ORIGIN,
@@ -217,10 +239,7 @@ fn persist_pairing(machine_token: &str) -> Result<(), String> {
 }
 
 fn read_pairing_token() -> Result<String, String> {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let path = std::path::Path::new(&home)
-        .join(".stria")
-        .join("portal.json");
+    let path = home_dir()?.join(".stria").join("portal.json");
     let raw = std::fs::read_to_string(&path).map_err(|_| "Not paired.".to_string())?;
     let v: serde_json::Value =
         serde_json::from_str(&raw).map_err(|_| "~/.stria/portal.json is corrupt.".to_string())?;
@@ -270,8 +289,7 @@ async fn download_suite_asset(url: String, expected_sha256: String) -> Result<St
             "Checksum mismatch: expected {expected_sha256}, got {digest}"
         ));
     }
-    let home = std::env::var("HOME").unwrap_or_default();
-    let dir = std::path::Path::new(&home).join(".stria").join("suite");
+    let dir = home_dir()?.join(".stria").join("suite");
     std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir suite dir: {e}"))?;
     let file_name = url.rsplit('/').next().unwrap_or("stria-suite.bin");
     let path = dir.join(file_name);
