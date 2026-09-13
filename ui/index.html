@@ -279,7 +279,10 @@
     <div class="hub-actions">
       <button class="secondary" id="check-btn">Check for updates</button>
       <button id="install-all-btn" style="display:none">Install all</button>
+      <button id="launch-btn">Launch Stria Works</button>
+      <button class="secondary" id="stop-btn" style="display:none">Stop</button>
     </div>
+    <p class="status" id="works-status"></p>
     <p class="status" id="hub-status"></p>
   </div>
 
@@ -467,6 +470,47 @@
         await sleep(400);
       }
     });
+
+    // Launch / monitor the real local Stria Works process.
+    const worksStatus = (msg, kind) => {
+      const el = document.getElementById("works-status");
+      el.textContent = msg;
+      el.className = "status" + (kind === "err" ? " err" : "");
+    };
+    async function refreshWorksState() {
+      const running = await window.__TAURI__.core.invoke("works_running").catch(() => false);
+      document.getElementById("launch-btn").style.display = running ? "none" : "block";
+      document.getElementById("stop-btn").style.display = running ? "block" : "none";
+      worksStatus(running ? "Stria Works is running." : "");
+      return running;
+    }
+    document.getElementById("launch-btn").addEventListener("click", async () => {
+      worksStatus("Launching Stria Works…");
+      try {
+        const report = await window.__TAURI__.core.invoke("launch_works");
+        if (report.already_running) {
+          worksStatus("Stria Works is already running.");
+        } else {
+          worksStatus(report.note);
+        }
+        await sleep(1200);
+        await refreshWorksState();
+      } catch (err) {
+        worksStatus(String(err), true);
+      }
+    });
+    document.getElementById("stop-btn").addEventListener("click", async () => {
+      try {
+        await window.__TAURI__.core.invoke("stop_works");
+        worksStatus("Stria Works stopped.");
+        await refreshWorksState();
+      } catch (err) {
+        worksStatus(String(err), true);
+      }
+    });
+    // Health monitoring: poll liveness while the hub is visible.
+    setInterval(refreshWorksState, 5000);
+    refreshWorksState();
 
     function formatSize(bytes) {
       if (!bytes) return "";

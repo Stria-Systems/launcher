@@ -8,3 +8,6 @@ dist/
 *.AppImage
 *.deb
 .DS_Store
+
+# Local ML/embedding cache
+src-tauri/.fastembed_cache/

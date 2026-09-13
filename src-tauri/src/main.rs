@@ -21,7 +21,19 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+mod works;
+
 const PORTAL_ORIGIN: &str = "https://portal.striasystems.com";
+
+/// Portal origin for all API calls. Production default; `STRIA_PORTAL_ORIGIN`
+/// override exists ONLY for staging/local acceptance (the acceptance gate
+/// must exercise the real code path against a non-production Portal).
+fn portal_origin() -> String {
+    std::env::var("STRIA_PORTAL_ORIGIN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| PORTAL_ORIGIN.to_string())
+}
 
 fn machine_id() -> String {
     let raw = format!(
@@ -111,8 +123,9 @@ async fn register_workspace(
     organization: String,
     password: String,
 ) -> Result<(), String> {
+    let origin = portal_origin();
     let res = client()?
-        .post(format!("{PORTAL_ORIGIN}/api/auth/register"))
+        .post(format!("{origin}/api/auth/register"))
         .json(&serde_json::json!({
             "email": email,
             "organization": organization,
@@ -131,6 +144,7 @@ async fn register_workspace(
 
 #[tauri::command]
 async fn sign_in(email: String, password: String) -> Result<String, String> {
+    let origin = portal_origin();
     // 1. Login → session cookie
     let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
     let c = reqwest::Client::builder()
@@ -138,7 +152,7 @@ async fn sign_in(email: String, password: String) -> Result<String, String> {
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
     let res = c
-        .post(format!("{PORTAL_ORIGIN}/api/auth/login"))
+        .post(format!("{origin}/api/auth/login"))
         .json(&serde_json::json!({
             "email": email,
             "password": password,
@@ -152,7 +166,7 @@ async fn sign_in(email: String, password: String) -> Result<String, String> {
     }
     // 2. Mint pairing code (session cookie attached)
     let pair_res = c
-        .post(format!("{PORTAL_ORIGIN}/api/auth/pairing"))
+        .post(format!("{origin}/api/auth/pairing"))
         .send()
         .await
         .map_err(|e| format!("Network error: {e}"))?;
@@ -168,8 +182,9 @@ async fn sign_in(email: String, password: String) -> Result<String, String> {
 
 #[tauri::command]
 async fn mint_pairing_code() -> Result<String, String> {
+    let origin = portal_origin();
     let res = client()?
-        .post(format!("{PORTAL_ORIGIN}/api/auth/pairing"))
+        .post(format!("{origin}/api/auth/pairing"))
         .send()
         .await
         .map_err(|e| format!("Network error: {e}"))?;
@@ -183,8 +198,9 @@ async fn mint_pairing_code() -> Result<String, String> {
 
 #[tauri::command]
 async fn pair_machine(pairing_code: String) -> Result<String, String> {
+    let origin = portal_origin();
     let res = client()?
-        .post(format!("{PORTAL_ORIGIN}/api/portal/ingest"))
+        .post(format!("{origin}/api/portal/ingest"))
         .bearer_auth(&pairing_code)
         .json(&serde_json::json!({
             "organization_id": "",
@@ -207,15 +223,15 @@ async fn pair_machine(pairing_code: String) -> Result<String, String> {
     let token = parsed
         .machine_token
         .ok_or_else(|| portal_error(&text, "Pairing failed. Check the code and try again."))?;
-    persist_pairing(&token)?;
+    persist_pairing(&token, &origin)?;
     Ok(token)
 }
 
-fn persist_pairing(machine_token: &str) -> Result<(), String> {
+fn persist_pairing(machine_token: &str, portal_origin: &str) -> Result<(), String> {
     let dir = home_dir()?.join(".stria");
     std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir ~/.stria: {e}"))?;
     let record = serde_json::json!({
-        "portalUrl": PORTAL_ORIGIN,
+        "portalUrl": portal_origin,
         "machineId": machine_id(),
         "machineToken": machine_token,
         "teamId": "team_default",
@@ -256,9 +272,10 @@ fn read_pairing_token() -> Result<String, String> {
 
 #[tauri::command]
 async fn fetch_software_updates() -> Result<String, String> {
+    let origin = portal_origin();
     let token = read_pairing_token()?;
     let res = client()?
-        .get(format!("{PORTAL_ORIGIN}/api/portal/software/updates"))
+        .get(format!("{origin}/api/portal/software/updates"))
         .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
@@ -312,6 +329,7 @@ async fn download_text(url: String) -> Result<String, String> {
 
 #[tauri::command]
 async fn report_software_versions(packages: serde_json::Value) -> Result<(), String> {
+    let origin = portal_origin();
     let token = read_pairing_token()?;
     let mut report = serde_json::json!({});
     // Always report launcher version
@@ -324,7 +342,7 @@ async fn report_software_versions(packages: serde_json::Value) -> Result<(), Str
     }
     let body = serde_json::json!({ "packages": report });
     let res = client()?
-        .post(format!("{PORTAL_ORIGIN}/api/portal/software"))
+        .post(format!("{origin}/api/portal/software"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&body)
         .send()
@@ -361,6 +379,23 @@ fn chrono_now_rfc3339() -> String {
     )
 }
 
+#[tauri::command]
+fn launch_works() -> Result<works::LaunchReport, String> {
+    works::launch_works()
+}
+
+#[tauri::command]
+fn works_running() -> Result<bool, String> {
+    Ok(works::works_lock_pid()
+        .map(works::is_process_alive)
+        .unwrap_or(false))
+}
+
+#[tauri::command]
+fn stop_works() -> Result<bool, String> {
+    works::stop_works()
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -372,9 +407,87 @@ fn main() {
             download_suite_asset,
             download_text,
             report_software_versions,
+            launch_works,
+            works_running,
+            stop_works,
             platform_name,
             arch_name
         ])
         .run(tauri::generate_context!())
         .expect("error while running stria launcher");
+}
+
+/// Release acceptance tests — the actual customer path, run ONLY with
+/// STRIA_ACCEPTANCE=1 against a live (staging or local) Portal:
+///   HOME=<fresh sandbox> STRIA_ACCEPTANCE=1 \
+///   STRIA_ACCEPTANCE_PAIRING_CODE=AAA-BBB-CCC cargo test -p stria-launcher acceptance -- --test-threads=1
+/// These touch the network, pair a real device, and spawn the real Works
+/// GUI — never in CI.
+#[cfg(test)]
+mod acceptance {
+    use super::*;
+
+    fn enabled() -> bool {
+        std::env::var("STRIA_ACCEPTANCE").ok().as_deref() == Some("1")
+    }
+
+    fn sandbox_home() -> std::path::PathBuf {
+        std::env::var("STRIA_ACCEPTANCE_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| std::env::temp_dir().join("stria-acceptance-home"))
+    }
+
+    /// The real launcher pairing code path: pairing code → machine token →
+    /// ~/.stria/portal.json in the sandbox. Uses the same sign of the same
+    /// endpoint the UI calls.
+    #[tokio::test]
+    async fn acceptance_pairing_writes_portal_json() {
+        if !enabled() {
+            return;
+        }
+        let code = std::env::var("STRIA_ACCEPTANCE_PAIRING_CODE")
+            .expect("STRIA_ACCEPTANCE_PAIRING_CODE required");
+        std::env::set_var("HOME", sandbox_home());
+        let token = pair_machine(code).await.expect("pairing must succeed");
+        assert!(token.starts_with("stria_mt"), "machine token shape");
+        let raw = std::fs::read_to_string(sandbox_home().join(".stria").join("portal.json"))
+            .expect("portal.json written");
+        let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(v["machineToken"], token);
+        assert!(!v["machineId"].as_str().unwrap_or("").is_empty());
+    }
+
+    /// The real launch path: release Works binary installed in the sandbox
+    /// suite dir → launcher spawns it (no $STRIA_WORKS_BIN override) →
+    /// liveness true → stop → dead.
+    #[test]
+    fn acceptance_launch_and_stop_packaged_works() {
+        if !enabled() {
+            return;
+        }
+        std::env::remove_var("STRIA_WORKS_BIN");
+        std::env::set_var("HOME", sandbox_home());
+        // Release binary must be suite-installed by the release flow first.
+        let bin = crate::works::resolve_works_binary_in(&sandbox_home());
+        assert!(bin.is_some(), "release Works must be suite-installed");
+        let report = crate::works::launch_works().expect("launch must succeed");
+        assert!(!report.already_running, "fresh sandbox: nothing running");
+        // Dwell so the booted Works can initialize backend + sync and drain.
+        let dwell: u64 = std::env::var("STRIA_ACCEPTANCE_DWELL_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2);
+        std::thread::sleep(std::time::Duration::from_secs(dwell));
+        let pid = crate::works::works_lock_pid_in(&sandbox_home());
+        assert!(pid.is_some(), "Works must record its PID");
+        assert!(crate::works::is_process_alive(pid.unwrap()));
+        assert!(crate::works::stop_works().expect("stop must succeed"));
+        for _ in 0..30 {
+            if !crate::works::is_process_alive(pid.unwrap()) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        panic!("Works did not stop");
+    }
 }
