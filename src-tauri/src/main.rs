@@ -142,10 +142,127 @@ async fn register_workspace(
     }
 }
 
+/// Pending `stria://pair` deep link waiting for the UI. The OS can wake
+/// the launcher with a pairing URL before the webview exists (cold start),
+/// so Rust parks the raw URL here and the UI replays it on load via
+/// `take_pending_pair_code`. Warm links (app already open) additionally
+/// emit `stria-pair-url`. Shape authority stays in the UI: it already
+/// validates and normalizes AAA-BBB-CCC.
+struct PendingPairCode(std::sync::Mutex<Option<String>>);
+
+/// Portal "Open in launcher" links look like `stria://pair?code=AAA-BBB-CCC`.
+fn is_pair_url(raw: &str) -> bool {
+    raw.starts_with("stria://pair?") || raw.starts_with("stria://pair/")
+}
+
+fn setup_deep_link(app: &tauri::App) {
+    use tauri::{Emitter, Manager};
+    use tauri_plugin_deep_link::DeepLinkExt;
+    let handle = app.handle().clone();
+    // Fail-open: if the OS refuses scheme registration the launcher still
+    // works — the operator copies the pairing code by hand.
+    if let Err(e) = app.deep_link().register("stria") {
+        eprintln!("stria launcher: could not register stria:// handler: {e}");
+    }
+    let warm = handle.clone();
+    handle.deep_link().on_open_url(move |event| {
+        for url in event.urls() {
+            let raw = url.to_string();
+            if is_pair_url(&raw) {
+                warm.state::<PendingPairCode>()
+                    .0
+                    .lock()
+                    .unwrap()
+                    .replace(raw.clone());
+                let _ = warm.emit("stria-pair-url", raw);
+            }
+        }
+    });
+    // Cold start straight into a link: park it for the UI to replay.
+    if let Ok(Some(urls)) = handle.deep_link().get_current() {
+        for url in urls {
+            let raw = url.to_string();
+            if is_pair_url(&raw) {
+                handle
+                    .state::<PendingPairCode>()
+                    .0
+                    .lock()
+                    .unwrap()
+                    .replace(raw);
+            }
+        }
+    }
+}
+
 #[tauri::command]
-async fn sign_in(email: String, password: String) -> Result<String, String> {
+fn take_pending_pair_code(state: tauri::State<'_, PendingPairCode>) -> Option<String> {
+    state.0.lock().unwrap().take()
+}
+
+#[cfg(test)]
+mod deep_link_tests {
+    use super::is_pair_url;
+
+    #[test]
+    fn pair_urls_route_to_pairing() {
+        assert!(is_pair_url("stria://pair?code=ABC-DEF-GHI"));
+        assert!(is_pair_url("stria://pair/?code=ABC-DEF-GHI"));
+        assert!(!is_pair_url("stria://downloads"));
+        assert!(!is_pair_url("https://portal.striasystems.com/downloads"));
+        assert!(!is_pair_url("stria://pair"));
+        assert!(!is_pair_url(""));
+    }
+}
+
+/// Which portal this launcher talks to. Production by default;
+/// `STRIA_PORTAL_ORIGIN` points it at staging/local for acceptance.
+/// The UI surfaces this as an env pill so a staging sign-in can never
+/// be mistaken for production (and vice versa).
+#[tauri::command]
+fn portal_env() -> serde_json::Value {
     let origin = portal_origin();
-    // 1. Login → session cookie
+    let env = if origin == PORTAL_ORIGIN {
+        "production"
+    } else if origin.contains("localhost")
+        || origin.contains("127.0.0.1")
+        || origin.contains(".local")
+    {
+        "development"
+    } else {
+        "staging"
+    };
+    serde_json::json!({ "origin": origin, "env": env })
+}
+
+/// In-flight password logins awaiting a second factor. The cookie jar
+/// (pre-2FA, no session yet) lives here keyed by challenge id so the
+/// verify step resumes the SAME login — a fresh client would have no
+/// session to mint a pairing code with. Entries are short-lived
+/// (challenge TTL is 5 minutes) and pruned on every insert/verify.
+struct PendingLogins(
+    std::sync::Mutex<std::collections::HashMap<String, (reqwest::Client, std::time::Instant)>>,
+);
+
+impl PendingLogins {
+    fn store(&self, challenge: String, client: reqwest::Client) {
+        let mut map = self.0.lock().unwrap();
+        let now = std::time::Instant::now();
+        map.retain(|_, (_, at)| now.duration_since(*at) < std::time::Duration::from_secs(600));
+        map.insert(challenge, (client, now));
+    }
+    fn take(&self, challenge: &str) -> Option<reqwest::Client> {
+        self.0.lock().unwrap().remove(challenge).map(|(c, _)| c)
+    }
+}
+
+#[tauri::command]
+async fn sign_in(
+    state: tauri::State<'_, PendingLogins>,
+    email: String,
+    password: String,
+) -> Result<String, String> {
+    let origin = portal_origin();
+    // 1. Login → session cookie (or a second-factor challenge)
     let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
     let c = reqwest::Client::builder()
         .cookie_provider(jar.clone())
@@ -160,11 +277,136 @@ async fn sign_in(email: String, password: String) -> Result<String, String> {
         .send()
         .await
         .map_err(|e| format!("Network error: {e}"))?;
+    if res.status().as_u16() == 403 {
+        // Password verified; the workspace still owes a second factor.
+        let text = res.text().await.unwrap_or_default();
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+        if v.get("two_factor_required")
+            .and_then(|b| b.as_bool())
+            .unwrap_or(false)
+        {
+            let challenge = v
+                .get("challenge_id")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            if challenge.is_empty() {
+                return Err(
+                    "Sign-in needs a second factor but the portal sent no challenge. Try again."
+                        .to_string(),
+                );
+            }
+            state.store(challenge.clone(), c);
+            // Typed wire error the UI matches on (never shown verbatim).
+            return Err(format!("TWO_FACTOR_REQUIRED|{challenge}"));
+        }
+        if v.get("two_factor_setup_required")
+            .and_then(|b| b.as_bool())
+            .unwrap_or(false)
+        {
+            let setup = v
+                .get("setup_challenge_id")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            return Err(format!("TWO_FACTOR_SETUP_REQUIRED|{setup}"));
+        }
+        return Err(portal_error(&text, "Sign-in refused."));
+    }
     if !res.status().is_success() {
         let text = res.text().await.unwrap_or_default();
         return Err(portal_error(&text, "Invalid email or password."));
     }
     // 2. Mint pairing code (session cookie attached)
+    let code = mint_pairing_with(&c, &origin).await?;
+    // 3. Exchange pairing code for machine token
+    pair_machine(code).await
+}
+
+/// Complete a challenged login: TOTP 6-digit code or single-use recovery
+/// code. On success this finishes the SAME login (mint + pair) and the
+/// operator lands in the software hub — a relogin after logout always
+/// passes through here; there is no trusted-device bypass.
+#[tauri::command]
+async fn verify_two_factor(
+    state: tauri::State<'_, PendingLogins>,
+    challenge_id: String,
+    code: String,
+) -> Result<String, String> {
+    let origin = portal_origin();
+    let c = state.take(&challenge_id).ok_or_else(|| {
+        "That sign-in expired. Enter your password again for a fresh code.".to_string()
+    })?;
+    let res = c
+        .post(format!("{origin}/api/auth/two-factor/verify"))
+        .json(&serde_json::json!({
+            "challenge_id": challenge_id,
+            "code": code,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if !res.status().is_success() {
+        let status = res.status().as_u16();
+        let text = res.text().await.unwrap_or_default();
+        if status == 410 {
+            return Err("That code window expired. Sign in again for a fresh code.".to_string());
+        }
+        if status == 423 {
+            return Err("Too many wrong codes. Try again in 15 minutes.".to_string());
+        }
+        return Err(portal_error(&text, "That code didn't match. Try again."));
+    }
+    let code = mint_pairing_with(&c, &origin).await?;
+    pair_machine(code).await
+}
+
+/// Start TOTP enrollment for a setup-blocked login (no session yet — the
+/// setup challenge from sign_in authorizes this and nothing else).
+/// Returns the secret + otpauth URL the UI shows for the authenticator.
+#[tauri::command]
+async fn totp_setup_enroll(setup_challenge_id: String) -> Result<String, String> {
+    let origin = portal_origin();
+    let res = client()?
+        .post(format!("{origin}/api/auth/two-factor/setup"))
+        .json(&serde_json::json!({
+            "enrollment_challenge_id": setup_challenge_id,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if !res.status().is_success() {
+        let text = res.text().await.unwrap_or_default();
+        return Err(portal_error(&text, "Could not start authenticator setup."));
+    }
+    res.text().await.map_err(|e| format!("Read failed: {e}"))
+}
+
+/// Confirm TOTP enrollment. Returns the one-time recovery codes JSON —
+/// the UI must show them once; the portal never will again.
+#[tauri::command]
+async fn totp_confirm_enroll(setup_challenge_id: String, code: String) -> Result<String, String> {
+    let origin = portal_origin();
+    let res = client()?
+        .post(format!("{origin}/api/auth/two-factor/confirm"))
+        .json(&serde_json::json!({
+            "enrollment_challenge_id": setup_challenge_id,
+            "code": code,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if !res.status().is_success() {
+        let text = res.text().await.unwrap_or_default();
+        return Err(portal_error(
+            &text,
+            "That code didn't match. Check the authenticator and try again.",
+        ));
+    }
+    res.text().await.map_err(|e| format!("Read failed: {e}"))
+}
+
+async fn mint_pairing_with(c: &reqwest::Client, origin: &str) -> Result<String, String> {
     let pair_res = c
         .post(format!("{origin}/api/auth/pairing"))
         .send()
@@ -173,11 +415,9 @@ async fn sign_in(email: String, password: String) -> Result<String, String> {
     let pair_text = pair_res.text().await.unwrap_or_default();
     let parsed: PairingResponse = serde_json::from_str(&pair_text)
         .map_err(|_| "Portal returned an unreadable response.".to_string())?;
-    let code = parsed
+    parsed
         .code
-        .ok_or_else(|| portal_error(&pair_text, "Could not mint a pairing code. Sign in first."))?;
-    // 3. Exchange pairing code for machine token
-    pair_machine(code).await
+        .ok_or_else(|| portal_error(&pair_text, "Could not mint a pairing code. Sign in first."))
 }
 
 #[tauri::command]
@@ -398,9 +638,23 @@ fn stop_works() -> Result<bool, String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
+        .manage(PendingLogins(std::sync::Mutex::new(
+            std::collections::HashMap::new(),
+        )))
+        .manage(PendingPairCode(std::sync::Mutex::new(None)))
+        .setup(|app| {
+            setup_deep_link(app);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             register_workspace,
             sign_in,
+            verify_two_factor,
+            totp_setup_enroll,
+            totp_confirm_enroll,
+            portal_env,
+            take_pending_pair_code,
             mint_pairing_code,
             pair_machine,
             fetch_software_updates,

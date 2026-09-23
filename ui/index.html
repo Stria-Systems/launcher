@@ -224,50 +224,213 @@
       background: rgba(126, 232, 176, 0.08);
       font-weight: 600;
     }
+    /* ── Brand header: Stria triangle mark + wordmark + env pill ── */
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: clamp(10px, 2vw, 16px);
+    }
+    .brand-mark { flex-shrink: 0; display: block; }
+    .brand-name {
+      font-size: clamp(12px, 2.2vw, 14px);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #f2f9f4;
+    }
+    .brand-name span { color: var(--text-faint); font-weight: 400; }
+    .env-pill {
+      margin-left: auto;
+      font-size: clamp(8px, 1.5vw, 10px);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-faint);
+      white-space: nowrap;
+    }
+    .env-pill.staging { color: var(--warn); border-color: rgba(240, 176, 96, 0.4); }
+    .env-pill.development { color: #9ecfff; border-color: rgba(158, 207, 255, 0.4); }
+    /* ── Second-factor + enrollment panels ── */
+    #twofa-panel, #enroll-panel { display: none; }
+    .panel-box {
+      margin-top: clamp(10px, 2vw, 16px);
+      border: 1px solid rgba(126, 232, 176, 0.2);
+      border-radius: 12px;
+      padding: clamp(10px, 2vw, 16px);
+      background: rgba(126, 232, 176, 0.04);
+    }
+    .panel-box h2 { margin-bottom: clamp(2px, 0.5vw, 4px); }
+    .secret {
+      font-family: var(--mono);
+      font-size: clamp(12px, 2.2vw, 14px);
+      letter-spacing: 0.06em;
+      color: var(--mint);
+      word-break: break-all;
+      margin: clamp(6px, 1.2vw, 10px) 0;
+    }
+    .recovery-list { margin: clamp(6px, 1.2vw, 10px) 0; }
+    .recovery-list code {
+      display: block;
+      margin-top: 3px;
+    }
+    .input-wrap { position: relative; }
+    .input-wrap input { padding-right: 64px; }
+    .show-toggle {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: auto;
+      margin: 0;
+      padding: 6px 10px;
+      background: transparent;
+      border: none;
+      color: var(--text-faint);
+      font-size: clamp(10px, 1.8vw, 12px);
+      font-weight: 500;
+    }
+    .show-toggle:hover { background: transparent; color: var(--mint); }
+    .link-row {
+      margin-top: clamp(6px, 1.2vw, 10px);
+      font-size: clamp(10px, 1.8vw, 12px);
+      color: var(--text-faint);
+      text-align: center;
+    }
+    .link-row button {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      background: none;
+      border: none;
+      color: var(--mint);
+      font-size: inherit;
+      font-weight: 500;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+      display: inline;
+    }
+    .trust-row {
+      margin-top: auto;
+      padding-top: clamp(12px, 2.5vw, 20px);
+      font-size: clamp(9px, 1.6vw, 11px);
+      color: var(--text-faint);
+      text-align: center;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
   <!-- Registration + pairing view -->
   <div class="card" id="setup">
-    <p class="eyebrow">Stria Launcher</p>
-    <h1 id="auth-title">Set up your workspace.</h1>
+    <div class="brand-row">
+      <!-- Stria triangle mark: outline + 3 spokes + 4 nodes, same geometry
+           as the portal wordmark, stroked in launcher mint for obsidian. -->
+      <svg class="brand-mark" width="26" height="26" viewBox="-8 -6 236 252" fill="none" aria-hidden="true">
+        <path d="M 208.6 117.8 L 14.8 227.5 L 14.8 8.1 Z" stroke="#7ee8b0" stroke-width="14" stroke-linejoin="round" />
+        <g stroke="#7ee8b0" stroke-width="9" stroke-linecap="round" opacity="0.65">
+          <line x1="78.6" y1="116.3" x2="15.3" y2="6.6" />
+          <line x1="79.4" y1="118.5" x2="15.3" y2="228.8" />
+          <line x1="79.4" y1="116.7" x2="209.4" y2="116.8" />
+        </g>
+        <g fill="#7ee8b0">
+          <circle cx="76.9" cy="117.7" r="16" />
+          <circle cx="16.5" cy="11.1" r="14" />
+          <circle cx="16.5" cy="226.3" r="14" />
+          <circle cx="205.6" cy="117.7" r="16" />
+        </g>
+      </svg>
+      <span class="brand-name">Stria <span>Launcher</span></span>
+      <span class="env-pill" id="env-pill" title="Which portal this launcher signs into">…</span>
+    </div>
+    <p class="eyebrow" id="auth-eyebrow">Stria Launcher</p>
+    <h1 id="auth-title">Sign in to your organization.</h1>
     <p class="sub" id="auth-sub">
-      The launcher installs and updates all Stria software on this machine —
-      Stria Works, Stria-Pi, and the Kestrel runtime. Your objectives, evidence,
-      and costs sync to portal.striasystems.com.
+      One workspace holds your objectives, evidence, run history, costs, and
+      machines. The launcher installs Stria Works — Stria-Pi runtime inside —
+      and keeps every machine on your workspace's pinned version.
     </p>
 
     <!-- Tab toggle -->
     <div class="auth-tabs">
-      <button class="auth-tab active" id="tab-create">Create workspace</button>
-      <button class="auth-tab" id="tab-signin">Sign in</button>
+      <button class="auth-tab" id="tab-create">Create workspace</button>
+      <button class="auth-tab active" id="tab-signin">Sign in</button>
     </div>
 
     <!-- Create workspace form -->
-    <form id="reg">
+    <form id="reg" style="display:none">
       <label for="email">Work email</label>
-      <input id="email" type="email" autocomplete="email" required />
+      <input id="email" type="email" autocomplete="email" placeholder="you@company.com" required />
       <label for="org">Organization name</label>
-      <input id="org" type="text" autocomplete="organization" required />
+      <input id="org" type="text" autocomplete="organization" placeholder="Acme Inc." required />
       <label for="pass">Password (10+ characters)</label>
-      <input id="pass" type="password" autocomplete="new-password" minlength="10" required />
-      <button type="submit" id="submit">Create workspace</button>
+      <div class="input-wrap">
+        <input id="pass" type="password" autocomplete="new-password" minlength="10" placeholder="Choose something strong" required />
+        <button type="button" class="show-toggle" data-for="pass">Show</button>
+      </div>
+      <button type="submit" id="submit">Create workspace →</button>
     </form>
 
-    <!-- Sign in form (hidden by default) -->
-    <form id="signin-form" style="display:none">
-      <label for="login-email">Work email</label>
-      <input id="login-email" type="email" autocomplete="email" required />
-      <label for="login-pass">Password</label>
-      <input id="login-pass" type="password" autocomplete="current-password" required />
-      <button type="submit" id="login-submit">Sign in</button>
+    <!-- Sign in form (default: operators sign into their organization here) -->
+    <form id="signin-form">
+      <div id="signin-creds">
+        <label for="login-email">Work email</label>
+        <input id="login-email" type="email" autocomplete="email" placeholder="you@company.com" required />
+        <label for="login-pass">Password</label>
+        <div class="input-wrap">
+          <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••••" required />
+          <button type="button" class="show-toggle" data-for="login-pass">Show</button>
+        </div>
+        <button type="submit" id="login-submit">Sign in to workspace →</button>
+      </div>
+
+      <!-- Second factor: every fresh sign-in on an enrolled account lands
+           here — relogin after logout, expired session, or a new machine
+           pairing all ask for a new code. No trusted-device bypass. -->
+      <div id="twofa-panel" class="panel-box">
+        <h2>Check your authenticator.</h2>
+        <p class="sub-faint" id="twofa-sub">Signing in. Enter the 6-digit code from your authenticator app.</p>
+        <label for="twofa-code" id="twofa-label">6-digit code</label>
+        <input id="twofa-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" />
+        <button type="button" id="twofa-verify">Verify and sign in →</button>
+        <p class="link-row">
+          <button type="button" id="twofa-recovery-toggle">Lost access? Use a recovery code</button>
+          <span> · </span>
+          <button type="button" id="twofa-restart">Start over</button>
+        </p>
+      </div>
+
+      <!-- First-time enrollment: the workspace requires two-factor but this
+           account has no authenticator yet. The setup challenge from sign-in
+           authorizes this panel and nothing else — no session until 2FA. -->
+      <div id="enroll-panel" class="panel-box">
+        <h2>Secure your workspace.</h2>
+        <p class="sub-faint">Your organization requires two-factor sign-in. Add this key to your authenticator app (1Password, Authy, Google Authenticator), then confirm with a code.</p>
+        <div class="secret" id="enroll-secret"></div>
+        <label for="enroll-code">6-digit code</label>
+        <input id="enroll-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" />
+        <button type="button" id="enroll-confirm">Confirm and continue →</button>
+        <div id="enroll-recovery" style="display:none">
+          <p class="sub-faint">Recovery codes — shown <strong>once</strong>, one use each. Save them somewhere safe.</p>
+          <div class="recovery-list" id="enroll-codes"></div>
+          <button type="button" id="enroll-done" class="secondary">Saved — back to sign in →</button>
+        </div>
+      </div>
     </form>
 
     <div class="pairing">
+      <h2>Pairing with a code instead?</h2>
+      <p class="sub-faint">Mint one in the portal under Machines — one code, one machine — and enter it here. The install binds to your organization before it runs anything.</p>
       <label for="code">Pairing code from the portal (AAA-BBB-CCC)</label>
       <input id="code" type="text" autocomplete="off" placeholder="AAA-BBB-CCC" />
       <p class="status" id="status"></p>
+      <button class="secondary" id="auth-switch" style="display:none"></button>
     </div>
+
+    <p class="trust-row">HttpOnly session · workspace-scoped access · human approvals by policy<br />Builds are issued from your workspace — the portal hands this machine the version you&apos;re entitled to.</p>
   </div>
 
   <!-- Software hub view (shown after pairing) -->
@@ -311,63 +474,302 @@
       }
     })();
 
-    // Tab switching
-    document.getElementById("tab-create").addEventListener("click", () => {
+    // Which portal this launcher signs into. Developers keep the default
+    // login flow and point STRIA_PORTAL_ORIGIN at staging/local; the pill
+    // makes the target unmistakable so a staging sign-in is never mistaken
+    // for production (and the staging pass validates the prod path, since
+    // it is the same code and the same portal build).
+    (async () => {
+      try {
+        const env = await window.__TAURI__.core.invoke("portal_env");
+        const pill = document.getElementById("env-pill");
+        const label = env.env === "production" ? "Production"
+          : env.env === "development" ? `Dev · ${env.origin}` : `Staging · ${env.origin}`;
+        pill.textContent = label;
+        pill.classList.add(env.env);
+        pill.title = `Signing into ${env.origin}`;
+      } catch {
+        document.getElementById("env-pill").textContent = "Production";
+      }
+    })();
+
+    // Show/hide password toggles (never steal focus from the input).
+    document.querySelectorAll(".show-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(btn.dataset.for);
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        btn.textContent = show ? "Hide" : "Show";
+        input.focus();
+      });
+    });
+
+    // ── Wizard routing: every step resolves forward. Errors never strand
+    // the operator on a dead form — they route to the step that unblocks
+    // them, carrying whatever was already typed.
+    const emailOf = (id) => document.getElementById(id).value.trim();
+    const authSwitch = document.getElementById("auth-switch");
+
+    function resetSecondFactor() {
+      document.getElementById("twofa-panel").style.display = "none";
+      document.getElementById("enroll-panel").style.display = "none";
+      document.getElementById("signin-creds").style.display = "block";
+      document.getElementById("twofa-code").value = "";
+      document.getElementById("enroll-code").value = "";
+      setRecoveryMode(false);
+    }
+
+    function showCreateTab(notice) {
       document.getElementById("tab-create").classList.add("active");
       document.getElementById("tab-signin").classList.remove("active");
       document.getElementById("reg").style.display = "block";
       document.getElementById("signin-form").style.display = "none";
-      document.getElementById("auth-title").textContent = "Set up your workspace.";
-      status("");
-    });
-    document.getElementById("tab-signin").addEventListener("click", () => {
+      document.getElementById("auth-title").textContent = "Create your organization.";
+      document.getElementById("auth-eyebrow").textContent = "Stria Launcher · New workspace";
+      resetSecondFactor();
+      authSwitch.style.display = "none";
+      status(notice || "");
+      document.getElementById("email").focus();
+    }
+
+    function showSignInTab(notice) {
       document.getElementById("tab-signin").classList.add("active");
       document.getElementById("tab-create").classList.remove("active");
       document.getElementById("reg").style.display = "none";
       document.getElementById("signin-form").style.display = "block";
-      document.getElementById("auth-title").textContent = "Sign in to your workspace.";
-      status("");
+      document.getElementById("auth-title").textContent = "Sign in to your organization.";
+      document.getElementById("auth-eyebrow").textContent = "Stria Launcher";
+      resetSecondFactor();
+      authSwitch.style.display = "none";
+      status(notice || "");
+      document.getElementById("login-pass").focus();
+    }
+
+    // The single forward action offered after a failure: label + destination
+    // are set by the failing step. One button, always a way forward.
+    function offerSwitch(label, target) {
+      authSwitch.textContent = label;
+      authSwitch.style.display = "block";
+      authSwitch.onclick = target;
+    }
+
+    // Tab switching (manual): carry the typed email across so switching
+    // tabs never costs retyping.
+    document.getElementById("tab-create").addEventListener("click", () => {
+      document.getElementById("email").value =
+        emailOf("login-email") || emailOf("email");
+      showCreateTab();
+    });
+    document.getElementById("tab-signin").addEventListener("click", () => {
+      document.getElementById("login-email").value =
+        emailOf("email") || emailOf("login-email");
+      showSignInTab();
     });
 
     // Registration
     document.getElementById("reg").addEventListener("submit", async (e) => {
       e.preventDefault();
+      const email = emailOf("email");
       status("Creating your workspace…");
       try {
         await window.__TAURI__.core.invoke("register_workspace", {
-          email: document.getElementById("email").value,
+          email,
           organization: document.getElementById("org").value,
           password: document.getElementById("pass").value,
         });
-        status("Workspace created. Check your email for the verification link, then pair this machine.");
+        status("Workspace created. Check your email for the verification link, then enter the pairing code below.");
+        document.getElementById("code").focus();
       } catch (err) {
-        status(String(err), true);
+        const msg = String(err);
+        if (/already exists/i.test(msg)) {
+          // The account is real — the way forward is sign-in, with the
+          // email carried over so the operator just types a password.
+          document.getElementById("login-email").value = email;
+          showSignInTab("That email already has a workspace — sign in to continue.");
+        } else {
+          status(msg, true);
+          offerSwitch("Already have a workspace? Sign in instead →", () => {
+            document.getElementById("login-email").value = email;
+            showSignInTab();
+          });
+        }
       }
     });
 
-    // Sign in
+    // Sign in — step 1 (password). Enrolled accounts come back with a
+    // second-factor challenge; workspace-required accounts without an
+    // authenticator come back with a setup challenge instead.
+    let pendingChallenge = "";
+    let pendingSetupChallenge = "";
+    let recoveryMode = false;
+
+    function setRecoveryMode(on) {
+      recoveryMode = on;
+      document.getElementById("twofa-label").textContent = on ? "Recovery code" : "6-digit code";
+      document.getElementById("twofa-code").placeholder = on ? "ABCD-1234" : "123 456";
+      document.getElementById("twofa-code").inputMode = on ? "text" : "numeric";
+      document.getElementById("twofa-recovery-toggle").textContent =
+        on ? "Use my authenticator instead" : "Lost access? Use a recovery code";
+      document.getElementById("twofa-code").value = "";
+      document.getElementById("twofa-code").focus();
+    }
+
+    async function enterHub() {
+      status("Signed in. Loading software hub…");
+      await sleep(500);
+      document.getElementById("setup").style.display = "none";
+      document.getElementById("hub").style.display = "block";
+      await loadHub();
+    }
+
     document.getElementById("signin-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      status("Signing in…");
+      // The inner panels have their own buttons; only the credential step
+      // submits this form.
+      if (document.getElementById("signin-creds").style.display === "none") return;
+      const email = emailOf("login-email");
+      status("Signing in to your organization…");
       try {
         await window.__TAURI__.core.invoke("sign_in", {
-          email: document.getElementById("login-email").value,
+          email,
           password: document.getElementById("login-pass").value,
         });
-        status("Signed in. Loading software hub…");
-        await sleep(500);
-        document.getElementById("setup").style.display = "none";
-        document.getElementById("hub").style.display = "block";
-        await loadHub();
+        await enterHub();
       } catch (err) {
-        status(String(err), true);
+        const msg = String(err);
+        const challenge = msg.match(/^TWO_FACTOR_REQUIRED\|(.+)$/);
+        const setupNeed = msg.match(/^TWO_FACTOR_SETUP_REQUIRED\|(.*)$/);
+        if (challenge) {
+          // Password verified — the workspace owes a fresh code.
+          pendingChallenge = challenge[1];
+          document.getElementById("signin-creds").style.display = "none";
+          document.getElementById("twofa-panel").style.display = "block";
+          document.getElementById("twofa-sub").textContent =
+            `Signing in as ${email}. Enter the 6-digit code from your authenticator app.`;
+          status("");
+          authSwitch.style.display = "none";
+          document.getElementById("twofa-code").focus();
+          return;
+        }
+        if (setupNeed) {
+          // Workspace requires 2FA, nothing enrolled yet — enroll here with
+          // the setup bearer, then sign in again (which will challenge).
+          pendingSetupChallenge = setupNeed[1];
+          status("Your organization requires two-factor sign-in — one quick setup, then you're in.");
+          try {
+            const raw = await window.__TAURI__.core.invoke("totp_setup_enroll", {
+              setupChallengeId: pendingSetupChallenge,
+            });
+            const data = JSON.parse(raw);
+            document.getElementById("signin-creds").style.display = "none";
+            document.getElementById("enroll-panel").style.display = "block";
+            document.getElementById("enroll-secret").textContent = data.secret;
+            document.getElementById("enroll-recovery").style.display = "none";
+            authSwitch.style.display = "none";
+            document.getElementById("enroll-code").focus();
+          } catch (setupErr) {
+            status(String(setupErr), true);
+          }
+          return;
+        }
+        status(msg, true);
+        offerSwitch("New here? Create the organization instead →", () => {
+          document.getElementById("email").value = email;
+          showCreateTab();
+        });
       }
     });
 
-    // Pairing
-    document.getElementById("code").addEventListener("change", async (e) => {
+    // Sign in — step 2 (authenticator code or single-use recovery code).
+    document.getElementById("twofa-verify").addEventListener("click", async () => {
+      const code = document.getElementById("twofa-code").value.trim();
+      if (!code) {
+        status(recoveryMode ? "Enter one of your recovery codes." : "Enter the 6-digit code from your authenticator app.", true);
+        return;
+      }
+      status("Verifying…");
+      try {
+        await window.__TAURI__.core.invoke("verify_two_factor", {
+          challengeId: pendingChallenge,
+          code,
+        });
+        pendingChallenge = "";
+        await enterHub();
+      } catch (err) {
+        status(String(err), true);
+        document.getElementById("twofa-code").select();
+      }
+    });
+    document.getElementById("twofa-code").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        document.getElementById("twofa-verify").click();
+      }
+    });
+    document.getElementById("twofa-recovery-toggle").addEventListener("click", () => setRecoveryMode(!recoveryMode));
+    document.getElementById("twofa-restart").addEventListener("click", () => {
+      pendingChallenge = "";
+      resetSecondFactor();
+      status("");
+      document.getElementById("login-pass").focus();
+    });
+
+    // Enrollment confirm → recovery codes (shown once) → back to sign-in,
+    // which now challenges with the fresh authenticator.
+    document.getElementById("enroll-confirm").addEventListener("click", async () => {
+      const code = document.getElementById("enroll-code").value.trim();
+      if (!code) {
+        status("Enter the 6-digit code from your authenticator app to confirm.", true);
+        return;
+      }
+      status("Confirming authenticator…");
+      try {
+        const raw = await window.__TAURI__.core.invoke("totp_confirm_enroll", {
+          setupChallengeId: pendingSetupChallenge,
+          code,
+        });
+        const data = JSON.parse(raw);
+        const list = document.getElementById("enroll-codes");
+        list.innerHTML = "";
+        for (const c of data.recovery_codes || []) {
+          const el = document.createElement("code");
+          el.textContent = c;
+          list.appendChild(el);
+        }
+        document.getElementById("enroll-recovery").style.display = "block";
+        status("Authenticator secured. Save the recovery codes, then sign in.");
+      } catch (err) {
+        status(String(err), true);
+        document.getElementById("enroll-code").select();
+      }
+    });
+    document.getElementById("enroll-done").addEventListener("click", () => {
+      pendingSetupChallenge = "";
+      resetSecondFactor();
+      status("Authenticator set. Sign in — you'll get an authenticator code step.");
+      document.getElementById("login-pass").value = "";
+      document.getElementById("login-pass").focus();
+    });
+
+    // Pairing codes are AAA-BBB-CCC. Format as the operator types so a
+    // pasted or lowercase code still lands, and never fail silently: a
+    // present-but-malformed code explains itself instead of doing nothing.
+    const codeInput = document.getElementById("code");
+    const PAIR_RE = /^[A-Z2-9]{3}-[A-Z2-9]{3}-[A-Z2-9]{3}$/;
+    codeInput.addEventListener("input", () => {
+      const raw = codeInput.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 9);
+      codeInput.value = [raw.slice(0, 3), raw.slice(3, 6), raw.slice(6, 9)]
+        .filter(Boolean)
+        .join("-");
+    });
+    codeInput.addEventListener("change", async (e) => {
       const code = e.target.value.trim();
-      if (!/^[A-Z2-9]{3}-[A-Z2-9]{3}-[A-Z2-9]{3}$/.test(code)) return;
+      if (!code) return;
+      if (!PAIR_RE.test(code)) {
+        status("That doesn't look like a pairing code — it should be 9 characters, like ABC-DEF-GHI. Mint one in the portal.", true);
+        codeInput.select();
+        return;
+      }
       status("Pairing this machine…");
       try {
         await window.__TAURI__.core.invoke("pair_machine", { pairingCode: code });
@@ -378,8 +780,49 @@
         await loadHub();
       } catch (err) {
         status(String(err), true);
+        codeInput.select();
       }
     });
+
+    // Portal "Open in launcher" (stria://pair?code=AAA-BBB-CCC). The OS can
+    // wake a cold launcher (code waits in take_pending_pair_code) or ping a
+    // warm one (stria-pair-url event). Either way the URL funnels through
+    // the same validated pairing flow as a typed code — shape authority
+    // stays here, so a malformed link explains itself instead of pairing
+    // the wrong thing.
+    async function acceptPairUrl(raw) {
+      let code = "";
+      try {
+        const u = new URL(String(raw || ""));
+        if (u.protocol !== "stria:" || u.hostname !== "pair") return;
+        code = (u.searchParams.get("code") || "").trim();
+      } catch {
+        return;
+      }
+      if (!code) return;
+      codeInput.value = code;
+      codeInput.dispatchEvent(new Event("input")); // normalize to AAA-BBB-CCC
+      if (!PAIR_RE.test(codeInput.value)) {
+        status("That portal link didn't carry a valid pairing code — mint a fresh one under Machines.", true);
+        codeInput.select();
+        return;
+      }
+      status("Pairing code received from the portal — pairing this machine…");
+      codeInput.dispatchEvent(new Event("change")); // runs the pairing flow
+    }
+    try {
+      const tauri = window.__TAURI__;
+      if (tauri?.core?.invoke) {
+        tauri.core.invoke("take_pending_pair_code").then((raw) => {
+          if (raw) acceptPairUrl(raw);
+        }).catch(() => {});
+      }
+      if (tauri?.event?.listen) {
+        tauri.event.listen("stria-pair-url", (e) => acceptPairUrl(e.payload));
+      }
+    } catch {
+      // Previewed outside Tauri (browser): manual code entry still works.
+    }
 
     async function loadHub() {
       hubStatus("Checking for updates…");

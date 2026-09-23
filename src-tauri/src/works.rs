@@ -157,6 +157,14 @@ pub fn resolve_works_binary_in(home: &std::path::Path) -> Option<PathBuf> {
     };
     #[cfg(target_os = "macos")]
     for base in [home.join("Applications"), PathBuf::from("/Applications")] {
+        // STRIA_WORKS_NO_SYSTEM_APPS=1 skips the machine-global scan so
+        // tests resolve purely from the given home + STRIA_WORKS_BIN, even
+        // on a Mac with Works installed. Production never sets it.
+        if base.as_path() == std::path::Path::new("/Applications")
+            && std::env::var("STRIA_WORKS_NO_SYSTEM_APPS").is_ok()
+        {
+            continue;
+        }
         let bundled = base
             .join("Stria Works.app")
             .join("Contents")
@@ -337,6 +345,11 @@ mod tests {
 
     #[test]
     fn resolve_prefers_suite_binary() {
+        // Process-global env is shared across test threads: serialize with
+        // the sibling env-mutating test and pin every variable resolve reads.
+        let _guard = env_lock();
+        let _bin = EnvGuard::set("STRIA_WORKS_BIN", "");
+        let _sys = EnvGuard::set("STRIA_WORKS_NO_SYSTEM_APPS", "1");
         let home = temp_home();
         assert!(resolve_works_binary_in(&home).is_none());
         let dir = home.join(".stria").join("suite");
@@ -349,20 +362,47 @@ mod tests {
     #[test]
     fn launch_requires_installed_binary() {
         // No STRIA_WORKS_BIN and empty home → clear install hint.
-        let saved = std::env::var("STRIA_WORKS_BIN").ok();
-        std::env::remove_var("STRIA_WORKS_BIN");
+        let _guard = env_lock();
+        let _bin = EnvGuard::set("STRIA_WORKS_BIN", "");
+        let _sys = EnvGuard::set("STRIA_WORKS_NO_SYSTEM_APPS", "1");
         let home = temp_home();
-        let home_str = home.to_string_lossy().to_string();
-        let saved_home = std::env::var("HOME").ok();
-        std::env::set_var("HOME", &home_str);
+        let home_str = home.to_string_lossy();
+        let _home = EnvGuard::set("HOME", &home_str);
         let err = launch_works().unwrap_err();
         assert!(err.contains("not installed"), "{err}");
-        match saved {
-            Some(v) => std::env::set_var("STRIA_WORKS_BIN", v),
-            None => std::env::remove_var("STRIA_WORKS_BIN"),
+    }
+
+    /// Serializes tests that mutate process-global env (cargo runs tests
+    /// on threads sharing one environment — parallel set/remove is a race).
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap()
+    }
+
+    /// Save/remove/restore one env var for the guard's lifetime.
+    struct EnvGuard {
+        key: &'static str,
+        saved: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let saved = std::env::var(key).ok();
+            if value.is_empty() {
+                std::env::remove_var(key);
+            } else {
+                std::env::set_var(key, value);
+            }
+            Self { key, saved }
         }
-        if let Some(v) = saved_home {
-            std::env::set_var("HOME", v);
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.saved {
+                Some(v) => std::env::set_var(self.key, v),
+                None => std::env::remove_var(self.key),
+            }
         }
     }
 }
