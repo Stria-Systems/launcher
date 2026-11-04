@@ -29,10 +29,41 @@ const PORTAL_ORIGIN: &str = "https://portal.striasystems.com";
 /// override exists ONLY for staging/local acceptance (the acceptance gate
 /// must exercise the real code path against a non-production Portal).
 fn portal_origin() -> String {
-    std::env::var("STRIA_PORTAL_ORIGIN")
+    let configured = std::env::var("STRIA_PORTAL_ORIGIN")
         .ok()
         .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| PORTAL_ORIGIN.to_string())
+        .unwrap_or_else(|| PORTAL_ORIGIN.to_string());
+    normalized_origin(&configured).unwrap_or_else(|| PORTAL_ORIGIN.to_string())
+}
+
+fn normalized_origin(raw: &str) -> Option<String> {
+    let url = reqwest::Url::parse(raw).ok()?;
+    if !matches!(url.scheme(), "http" | "https") || !url.username().is_empty() {
+        return None;
+    }
+    url.host_str()?;
+    if url.path() != "/" && !url.path().is_empty() {
+        return None;
+    }
+    Some(url.origin().ascii_serialization())
+}
+
+fn asset_origin() -> String {
+    std::env::var("STRIA_ASSET_ORIGIN")
+        .ok()
+        .and_then(|v| normalized_origin(&v))
+        .unwrap_or_else(portal_origin)
+}
+
+fn validated_asset_url(raw: &str) -> Result<reqwest::Url, String> {
+    let url = reqwest::Url::parse(raw).map_err(|_| "Invalid asset URL.".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") || !url.username().is_empty() {
+        return Err("Asset URL must be an HTTP(S) origin without credentials.".to_string());
+    }
+    if url.origin().ascii_serialization() != asset_origin() {
+        return Err("Asset URL is not on the configured asset origin.".to_string());
+    }
+    Ok(url)
 }
 
 fn machine_id() -> String {
@@ -113,6 +144,8 @@ fn portal_error(body: &str, fallback: &str) -> String {
 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))
 }
@@ -250,8 +283,16 @@ impl PendingLogins {
         map.retain(|_, (_, at)| now.duration_since(*at) < std::time::Duration::from_secs(600));
         map.insert(challenge, (client, now));
     }
-    fn take(&self, challenge: &str) -> Option<reqwest::Client> {
-        self.0.lock().unwrap().remove(challenge).map(|(c, _)| c)
+
+    fn get(&self, challenge: &str) -> Option<reqwest::Client> {
+        let mut map = self.0.lock().unwrap();
+        let now = std::time::Instant::now();
+        map.retain(|_, (_, at)| now.duration_since(*at) < std::time::Duration::from_secs(600));
+        map.get(challenge).map(|(c, _)| c.clone())
+    }
+
+    fn remove(&self, challenge: &str) {
+        self.0.lock().unwrap().remove(challenge);
     }
 }
 
@@ -260,12 +301,14 @@ async fn sign_in(
     state: tauri::State<'_, PendingLogins>,
     email: String,
     password: String,
-) -> Result<String, String> {
+) -> Result<(), String> {
     let origin = portal_origin();
     // 1. Login → session cookie (or a second-factor challenge)
     let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
     let c = reqwest::Client::builder()
         .cookie_provider(jar.clone())
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
     let res = c
@@ -332,9 +375,9 @@ async fn verify_two_factor(
     state: tauri::State<'_, PendingLogins>,
     challenge_id: String,
     code: String,
-) -> Result<String, String> {
+) -> Result<(), String> {
     let origin = portal_origin();
-    let c = state.take(&challenge_id).ok_or_else(|| {
+    let c = state.get(&challenge_id).ok_or_else(|| {
         "That sign-in expired. Enter your password again for a fresh code.".to_string()
     })?;
     let res = c
@@ -357,6 +400,7 @@ async fn verify_two_factor(
         }
         return Err(portal_error(&text, "That code didn't match. Try again."));
     }
+    state.remove(&challenge_id);
     let code = mint_pairing_with(&c, &origin).await?;
     pair_machine(code).await
 }
@@ -421,23 +465,7 @@ async fn mint_pairing_with(c: &reqwest::Client, origin: &str) -> Result<String, 
 }
 
 #[tauri::command]
-async fn mint_pairing_code() -> Result<String, String> {
-    let origin = portal_origin();
-    let res = client()?
-        .post(format!("{origin}/api/auth/pairing"))
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {e}"))?;
-    let text = res.text().await.unwrap_or_default();
-    let parsed: PairingResponse = serde_json::from_str(&text)
-        .map_err(|_| "Portal returned an unreadable response.".to_string())?;
-    parsed
-        .code
-        .ok_or_else(|| portal_error(&text, "Could not mint a pairing code. Sign in first."))
-}
-
-#[tauri::command]
-async fn pair_machine(pairing_code: String) -> Result<String, String> {
+async fn pair_machine(pairing_code: String) -> Result<(), String> {
     let origin = portal_origin();
     let res = client()?
         .post(format!("{origin}/api/portal/ingest"))
@@ -464,7 +492,7 @@ async fn pair_machine(pairing_code: String) -> Result<String, String> {
         .machine_token
         .ok_or_else(|| portal_error(&text, "Pairing failed. Check the code and try again."))?;
     persist_pairing(&token, &origin)?;
-    Ok(token)
+    Ok(())
 }
 
 fn persist_pairing(machine_token: &str, portal_origin: &str) -> Result<(), String> {
@@ -520,14 +548,37 @@ async fn fetch_software_updates() -> Result<String, String> {
         .send()
         .await
         .map_err(|e| format!("Network error: {e}"))?;
+    let status = res.status();
     let text = res.text().await.map_err(|e| format!("Read failed: {e}"))?;
+    if !status.is_success() {
+        return Err(portal_error(&text, "Software updates are unavailable."));
+    }
     Ok(text)
 }
 
 #[tauri::command]
 async fn download_suite_asset(url: String, expected_sha256: String) -> Result<String, String> {
+    let parsed = validated_asset_url(&url)?;
+    if expected_sha256.len() != 64 || !expected_sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("Invalid asset checksum.".to_string());
+    }
+    let file_name = parsed
+        .path_segments()
+        .and_then(|mut segments| segments.next_back())
+        .filter(|name| !name.is_empty() && *name != "." && *name != "..")
+        .ok_or_else(|| "Asset URL has no file name.".to_string())?;
+    let safe_name: String = file_name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
     let res = client()?
-        .get(&url)
+        .get(parsed)
         .send()
         .await
         .map_err(|e| format!("Download failed: {e}"))?;
@@ -548,23 +599,9 @@ async fn download_suite_asset(url: String, expected_sha256: String) -> Result<St
     }
     let dir = home_dir()?.join(".stria").join("suite");
     std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir suite dir: {e}"))?;
-    let file_name = url.rsplit('/').next().unwrap_or("stria-suite.bin");
-    let path = dir.join(file_name);
+    let path = dir.join(safe_name);
     std::fs::write(&path, &bytes).map_err(|e| format!("write asset: {e}"))?;
     Ok(path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-async fn download_text(url: String) -> Result<String, String> {
-    let res = client()?
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Download failed: {e}"))?;
-    if !res.status().is_success() {
-        return Err(format!("Download failed: HTTP {}", res.status()));
-    }
-    res.text().await.map_err(|e| format!("Read failed: {e}"))
 }
 
 #[tauri::command]
@@ -577,9 +614,12 @@ async fn report_software_versions(packages: serde_json::Value) -> Result<(), Str
     // Merge caller-supplied package versions (from JS after download)
     if let Some(obj) = packages.as_object() {
         for (k, v) in obj {
-            report[k] = v.clone();
+            if k != "stria-launcher" {
+                report[k] = v.clone();
+            }
         }
     }
+    report["stria-launcher"] = serde_json::json!(env!("CARGO_PKG_VERSION"));
     let body = serde_json::json!({ "packages": report });
     let res = client()?
         .post(format!("{origin}/api/portal/software"))
@@ -655,11 +695,9 @@ fn main() {
             totp_confirm_enroll,
             portal_env,
             take_pending_pair_code,
-            mint_pairing_code,
             pair_machine,
             fetch_software_updates,
             download_suite_asset,
-            download_text,
             report_software_versions,
             launch_works,
             works_running,
@@ -702,12 +740,12 @@ mod acceptance {
         let code = std::env::var("STRIA_ACCEPTANCE_PAIRING_CODE")
             .expect("STRIA_ACCEPTANCE_PAIRING_CODE required");
         std::env::set_var("HOME", sandbox_home());
-        let token = pair_machine(code).await.expect("pairing must succeed");
-        assert!(token.starts_with("stria_mt"), "machine token shape");
+        pair_machine(code).await.expect("pairing must succeed");
         let raw = std::fs::read_to_string(sandbox_home().join(".stria").join("portal.json"))
             .expect("portal.json written");
         let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(v["machineToken"], token);
+        let token = v["machineToken"].as_str().unwrap_or_default();
+        assert!(token.starts_with("stria_mt"), "machine token shape");
         assert!(!v["machineId"].as_str().unwrap_or("").is_empty());
     }
 

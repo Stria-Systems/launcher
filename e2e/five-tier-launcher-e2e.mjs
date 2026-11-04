@@ -263,7 +263,7 @@ async function launcherTwoFactorLoop(client, email, password, machineTag, orgId)
   const live = async (secret) =>
     totpCode(base32Decode(secret), Math.floor(Date.now() / 1000));
 
-  let r = await call(client, "/api/auth/two-factor/setup", { method: "POST", body: {} });
+  let r = await call(client, "/api/auth/two-factor/setup", { method: "POST", body: { password } });
   check("2FA setup 200 + secret", r.status === 200 && /^[A-Z2-7]{32}$/.test(r.data?.secret ?? ""));
   if (!r.data?.secret) throw new Error("no totp secret");
   const secret = r.data.secret;

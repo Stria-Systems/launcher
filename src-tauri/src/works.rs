@@ -120,11 +120,15 @@ fn probe_windows(pid: u32) -> bool {
 /// Candidate locations for the installed Works binary, in priority order.
 /// `$STRIA_WORKS_BIN` wins for dev/CI.
 pub fn resolve_works_binary_in(home: &std::path::Path) -> Option<PathBuf> {
-    if let Ok(p) = std::env::var("STRIA_WORKS_BIN") {
-        if !p.trim().is_empty() {
-            let path = PathBuf::from(p);
-            if path.exists() {
-                return Some(path);
+    let allow_override = cfg!(debug_assertions)
+        || std::env::var("STRIA_ALLOW_UNVERIFIED_WORKS").as_deref() == Ok("1");
+    if allow_override {
+        if let Ok(p) = std::env::var("STRIA_WORKS_BIN") {
+            if !p.trim().is_empty() {
+                let path = PathBuf::from(p);
+                if path.exists() {
+                    return Some(path);
+                }
             }
         }
     }

@@ -730,7 +730,7 @@
         });
         const data = JSON.parse(raw);
         const list = document.getElementById("enroll-codes");
-        list.innerHTML = "";
+        list.replaceChildren();
         for (const c of data.recovery_codes || []) {
           const el = document.createElement("code");
           el.textContent = c;
@@ -833,17 +833,24 @@
         const data = JSON.parse(updateJson);
 
         const list = document.getElementById("pkg-list");
-        list.innerHTML = "";
+        list.replaceChildren();
 
         if (!data.updates || data.updates.length === 0) {
           document.getElementById("hub-title").textContent = "Your software is up to date.";
           document.getElementById("hub-sub").textContent = data.org_id;
-          list.innerHTML = `
-            <div class="empty-state">
-              <div class="icon">✓</div>
-              <div class="title">All packages current</div>
-              <div class="desc">The launcher checks for updates automatically.</div>
-            </div>`;
+          const empty = document.createElement("div");
+          empty.className = "empty-state";
+          const icon = document.createElement("div");
+          icon.className = "icon";
+          icon.textContent = "✓";
+          const title = document.createElement("div");
+          title.className = "title";
+          title.textContent = "All packages current";
+          const desc = document.createElement("div");
+          desc.className = "desc";
+          desc.textContent = "The launcher checks for updates automatically.";
+          empty.append(icon, title, desc);
+          list.appendChild(empty);
           hubStatus("All packages up to date.");
           document.getElementById("install-all-btn").style.display = "none";
         } else {
@@ -857,17 +864,32 @@
             const asset = u.assets.find(a => a.platform === platform && a.arch === arch)
                       || u.assets.find(a => a.platform === platform)
                       || u.assets[0];
-            div.innerHTML = `
-              <div class="pkg-head">
-                <span class="pkg-name">${u.package_id}</span>
-                <span class="pkg-status available">Update</span>
-              </div>
-              <div class="pkg-meta">${u.current_version ?? "not installed"} → ${u.target_version} · ${u.channel}</div>
-              <div class="pkg-actions">
-                <button class="secondary install-btn"${asset ? "" : " disabled"}>Install${asset ? " (" + formatSize(asset.size) + ")" : " (no build)"}</button>
-              </div>
-              <div class="progress"><div class="progress-bar"></div></div>
-            `;
+            const head = document.createElement("div");
+            head.className = "pkg-head";
+            const name = document.createElement("span");
+            name.className = "pkg-name";
+            name.textContent = u.package_id;
+            const status = document.createElement("span");
+            status.className = "pkg-status available";
+            status.textContent = "Update";
+            head.append(name, status);
+            const meta = document.createElement("div");
+            meta.className = "pkg-meta";
+            meta.textContent = `${u.current_version ?? "not installed"} → ${u.target_version} · ${u.channel}`;
+            const actions = document.createElement("div");
+            actions.className = "pkg-actions";
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "secondary install-btn";
+            btn.disabled = !asset;
+            btn.textContent = asset ? `Install (${formatSize(asset.size)})` : "Install (no build)";
+            actions.appendChild(btn);
+            const progress = document.createElement("div");
+            progress.className = "progress";
+            const bar = document.createElement("div");
+            bar.className = "progress-bar";
+            progress.appendChild(bar);
+            div.append(head, meta, actions, progress);
             list.appendChild(div);
             // Bind install
             const btn = div.querySelector(".install-btn");
