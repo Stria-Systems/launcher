@@ -58,6 +58,11 @@ jobs:
       - name: Clippy (warnings denied)
         run: cargo clippy --all-targets -- -D warnings
 
+      # Contract gate: the launcher is the only writer of portal.json, so
+      # schemaVersion 2 + org/employee/device separation is release-critical.
+      - name: Identity contract (portal.json v2)
+        run: cargo test --workspace identity_tests
+
       - name: Tests
         run: cargo test --workspace
 

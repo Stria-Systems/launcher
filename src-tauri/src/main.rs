@@ -129,10 +129,27 @@ fn username() -> String {
     "unknown".to_string()
 }
 
+/// Non-secret identity returned by the pairing exchange (contract §5.1).
+/// The launcher is the only writer of `portal.json`; the portal is the only
+/// authority for these values. A team label is NOT an organization.
+#[derive(Deserialize)]
+struct PairingIdentity {
+    #[serde(default)]
+    org_id: String,
+    #[serde(default)]
+    org_name: String,
+    #[serde(default)]
+    user_email: String,
+    #[serde(default)]
+    team_id: String,
+}
+
 #[derive(Deserialize)]
 struct IngestResponse {
     #[serde(default)]
     machine_token: Option<String>,
+    #[serde(default)]
+    identity: Option<PairingIdentity>,
 }
 
 fn portal_error(body: &str, fallback: &str) -> String {
@@ -230,6 +247,82 @@ fn setup_deep_link(app: &tauri::App) {
 #[tauri::command]
 fn take_pending_pair_code(state: tauri::State<'_, PendingPairCode>) -> Option<String> {
     state.0.lock().unwrap().take()
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    fn sample() -> PairingIdentity {
+        PairingIdentity {
+            org_id: "org_acme".into(),
+            org_name: "Acme Test Co".into(),
+            user_email: "ada@acme.test".into(),
+            team_id: "org_acme__team_default".into(),
+        }
+    }
+
+    #[test]
+    fn pairing_record_separates_employee_customer_and_device() {
+        let rec = pairing_record("stria_mt_test", "https://portal.example", Some(&sample()));
+        assert_eq!(rec["schemaVersion"], 2);
+        assert_eq!(rec["orgId"], "org_acme", "customer workspace id");
+        assert_eq!(rec["orgName"], "Acme Test Co");
+        assert_eq!(rec["userEmail"], "ada@acme.test", "employee identity");
+        assert!(rec.get("machineId").is_some(), "device identity");
+        // A team is stored, but only as its own routing label: it must never
+        // occupy or derive the organization field.
+        assert_eq!(rec["teamId"], "org_acme__team_default");
+        assert_ne!(rec["orgId"], rec["teamId"]);
+    }
+
+    #[test]
+    fn public_identity_never_exposes_the_machine_token() {
+        let rec = pairing_record("stria_mt_secret", "https://portal.example", Some(&sample()));
+        let view = public_identity(&rec);
+        assert_eq!(view["paired"], true);
+        assert_eq!(view["orgId"], "org_acme");
+        assert!(view.get("machineToken").is_none());
+        let rendered = view.to_string();
+        assert!(!rendered.contains("stria_mt_secret"));
+    }
+
+    #[test]
+    fn unpaired_identity_omits_empty_profile_fields() {
+        let rec = pairing_record("stria_mt_test", "https://portal.example", None);
+        assert!(rec.get("orgId").is_none());
+        assert!(rec.get("orgName").is_none());
+        assert!(rec.get("userEmail").is_none());
+        assert_eq!(public_identity(&rec)["orgId"], "");
+    }
+
+    #[test]
+    fn portal_json_write_is_atomic_and_private() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("stria-launcher-identity-{stamp}"));
+        let path = dir.join(".stria").join("portal.json");
+        let first = pairing_record("stria_mt_a", "https://portal.example", Some(&sample()));
+        write_portal_json(&path, &first).expect("first write");
+        let second = pairing_record("stria_mt_b", "https://portal.example", None);
+        write_portal_json(&path, &second).expect("atomic replace");
+        let raw = std::fs::read_to_string(&path).expect("read back");
+        let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(v["machineToken"], "stria_mt_b");
+        assert!(
+            !path.with_extension("json.tmp").exists(),
+            "temp file must be renamed away, not left behind"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "machine token file must be owner-only");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[cfg(test)]
@@ -491,42 +584,127 @@ async fn pair_machine(pairing_code: String) -> Result<(), String> {
     let token = parsed
         .machine_token
         .ok_or_else(|| portal_error(&text, "Pairing failed. Check the code and try again."))?;
-    persist_pairing(&token, &origin)?;
+    persist_pairing(&token, &origin, parsed.identity.as_ref())?;
     Ok(())
 }
 
-fn persist_pairing(machine_token: &str, portal_origin: &str) -> Result<(), String> {
-    let dir = home_dir()?.join(".stria");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir ~/.stria: {e}"))?;
-    let record = serde_json::json!({
+/// Path of the launcher-owned identity file. `STRIA_PORTAL_JSON` overrides
+/// it for tests and dev — the same override Works already honours, so both
+/// sides always read the same file.
+fn portal_json_path() -> Result<std::path::PathBuf, String> {
+    if let Ok(p) = std::env::var("STRIA_PORTAL_JSON") {
+        if !p.trim().is_empty() {
+            return Ok(std::path::PathBuf::from(p));
+        }
+    }
+    Ok(home_dir()?.join(".stria").join("portal.json"))
+}
+
+/// Build the durable identity record. This is the ONE place the pairing
+/// response becomes local state: the machine token stays the only secret,
+/// and the employee (userEmail), the customer (orgId/orgName), and the
+/// device (machineId) are separate fields — a team label never stands in
+/// for an organization.
+fn pairing_record(
+    machine_token: &str,
+    portal_origin: &str,
+    identity: Option<&PairingIdentity>,
+) -> serde_json::Value {
+    let mut record = serde_json::json!({
+        "schemaVersion": 2,
         "portalUrl": portal_origin,
         "machineId": machine_id(),
         "machineToken": machine_token,
-        "teamId": "team_default",
         "platform": platform_name(),
         "arch": arch_name(),
         "launcherVersion": env!("CARGO_PKG_VERSION"),
         "pairedAt": chrono_now_rfc3339(),
     });
-    let path = dir.join("portal.json");
-    std::fs::write(
-        &path,
-        serde_json::to_string_pretty(&record).unwrap_or_default() + "\n",
-    )
-    .map_err(|e| format!("write portal.json: {e}"))?;
+    if let Some(id) = identity {
+        for (key, value) in [
+            ("orgId", id.org_id.trim()),
+            ("orgName", id.org_name.trim()),
+            ("userEmail", id.user_email.trim()),
+            ("teamId", id.team_id.trim()),
+        ] {
+            if !value.is_empty() {
+                record[key] = serde_json::Value::String(value.to_string());
+            }
+        }
+    }
+    record
+}
+
+/// The non-secret projection other processes (and the UI) may read.
+/// Deliberately built by allowlist so `machineToken` can never be added by
+/// accident when the record grows.
+fn public_identity(record: &serde_json::Value) -> serde_json::Value {
+    let str_at = |key: &str| {
+        record
+            .get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    serde_json::json!({
+        "paired": !str_at("machineToken").is_empty(),
+        "portalUrl": str_at("portalUrl"),
+        "machineId": str_at("machineId"),
+        "orgId": str_at("orgId"),
+        "orgName": str_at("orgName"),
+        "userEmail": str_at("userEmail"),
+        "teamId": str_at("teamId"),
+        "launcherVersion": str_at("launcherVersion"),
+        "pairedAt": str_at("pairedAt"),
+    })
+}
+
+/// Write the identity file atomically (temp + rename). A reader can never
+/// observe a half-written `portal.json`; that matters because Works reads
+/// it on startup and a partial file previously looked like "not paired".
+fn write_portal_json(path: &std::path::Path, record: &serde_json::Value) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("mkdir {}: {e}", dir.display()))?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let body = serde_json::to_string_pretty(record).unwrap_or_default() + "\n";
+    std::fs::write(&tmp, body).map_err(|e| format!("write portal.json.tmp: {e}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("chmod portal.json.tmp: {e}"))?;
     }
+    #[cfg(windows)]
+    let _ = std::fs::remove_file(path); // rename never replaces on Windows
+    std::fs::rename(&tmp, path).map_err(|e| format!("replace portal.json: {e}"))?;
     Ok(())
 }
 
-fn read_pairing_token() -> Result<String, String> {
-    let path = home_dir()?.join(".stria").join("portal.json");
+fn persist_pairing(
+    machine_token: &str,
+    portal_origin: &str,
+    identity: Option<&PairingIdentity>,
+) -> Result<(), String> {
+    let record = pairing_record(machine_token, portal_origin, identity);
+    write_portal_json(&portal_json_path()?, &record)
+}
+
+fn read_portal_json() -> Result<serde_json::Value, String> {
+    let path = portal_json_path()?;
     let raw = std::fs::read_to_string(&path).map_err(|_| "Not paired.".to_string())?;
-    let v: serde_json::Value =
-        serde_json::from_str(&raw).map_err(|_| "~/.stria/portal.json is corrupt.".to_string())?;
+    serde_json::from_str(&raw).map_err(|_| "~/.stria/portal.json is corrupt.".to_string())
+}
+
+/// Non-secret identity for the UI and for diagnostics. Never returns the
+/// machine token; callers that need it use `read_pairing_token` internally.
+#[tauri::command]
+fn portal_identity() -> Result<serde_json::Value, String> {
+    Ok(public_identity(&read_portal_json()?))
+}
+
+fn read_pairing_token() -> Result<String, String> {
+    let v = read_portal_json()?;
     let t = v
         .get("machineToken")
         .and_then(|t| t.as_str())
@@ -696,6 +874,7 @@ fn main() {
             portal_env,
             take_pending_pair_code,
             pair_machine,
+            portal_identity,
             fetch_software_updates,
             download_suite_asset,
             report_software_versions,
