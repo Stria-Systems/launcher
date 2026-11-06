@@ -438,6 +438,7 @@
     <p class="eyebrow">Stria Software Hub</p>
     <h1 id="hub-title">Your software.</h1>
     <p class="sub" id="hub-sub">Checking for updates…</p>
+    <p class="sub-faint" id="hub-identity"></p>
     <div id="pkg-list"></div>
     <div class="hub-actions">
       <button class="secondary" id="check-btn">Check for updates</button>
@@ -824,7 +825,26 @@
       // Previewed outside Tauri (browser): manual code entry still works.
     }
 
+    // The launcher is the identity manager: it shows the employee and the
+    // customer workspace the portal paired, and never the machine token.
+    async function renderIdentity() {
+      const el = document.getElementById("hub-identity");
+      try {
+        const id = await window.__TAURI__.core.invoke("portal_identity");
+        if (!id.paired || (!id.orgId && !id.orgName)) {
+          el.textContent = "";
+          return;
+        }
+        const workspace = id.orgName || id.orgId;
+        el.textContent = id.userEmail ? `${id.userEmail} · ${workspace}` : workspace;
+        el.title = `Customer workspace ${id.orgId || "unknown"} · machine ${id.machineId}`;
+      } catch {
+        el.textContent = "";
+      }
+    }
+
     async function loadHub() {
+      renderIdentity();
       hubStatus("Checking for updates…");
       try {
         const platform = await window.__TAURI__.core.invoke("platform_name");
