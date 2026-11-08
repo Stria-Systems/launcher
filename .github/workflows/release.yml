@@ -58,6 +58,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify the tag names the source version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(tr -d '[:space:]' < VERSION)
+          test "${GITHUB_REF_NAME}" = "v${version}" || {
+            echo "::error::tag '${GITHUB_REF_NAME}' must be 'v${version}' (VERSION=${version})"
+            exit 1
+          }
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -184,6 +195,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Extract release notes from the changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(tr -d '[:space:]' < VERSION)
+          awk -v v="$version" '
+            $0 ~ "^## " v "([ \t]|$)" { capture=1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          test -s RELEASE_NOTES.md || {
+            echo "::error::CHANGELOG.md has no notes for ${version}"
+            exit 1
+          }
+
       - name: Fail-closed gate — all signing secrets must exist
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
@@ -234,4 +260,5 @@ jobs:
             dist/${{ env.LINUX_APPIMAGE }}
             dist/${{ env.LINUX_DEB }}
             dist/sha256sums.txt
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
+          fail_on_unmatched_files: true
