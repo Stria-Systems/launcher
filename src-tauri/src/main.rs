@@ -962,3 +962,18 @@ mod acceptance {
         panic!("Works did not stop");
     }
 }
+
+#[cfg(test)]
+mod brand_tests {
+    /// The launcher is the first surface a customer sees. Its product name and
+    /// mint accent are release-contract values, not styling suggestions; the
+    /// portal brand test pins the same family on the web side.
+    #[test]
+    fn brand_surface_names_the_launcher_and_keeps_the_mint() {
+        let ui = include_str!("../../ui/index.html");
+        assert!(ui.contains("<title>Stria Launcher</title>"));
+        assert!(ui.contains("--mint: #7ee8b0"));
+        assert!(ui.contains("Stria Works"));
+        assert!(ui.contains("Stria-Pi"));
+    }
+}
