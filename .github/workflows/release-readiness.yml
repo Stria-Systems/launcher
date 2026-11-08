@@ -1,0 +1,104 @@
+name: Release readiness
+
+# Standard v1 — see RELEASING.md.
+#
+# Cheap and secretless: proves the version a human reads is the version the
+# build reads, the changelog covers it, and a tag names it. The heavy signing
+# matrix stays in release.yml and only runs on a tag.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    name: version · changelog · asset contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the release record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f VERSION
+          test -f RELEASING.md
+          test -f CHANGELOG.md
+          version=$(tr -d '[:space:]' < VERSION)
+          [ -n "$version" ] || { echo "::error::VERSION is empty"; exit 1; }
+
+          pkg=$(node -p "require('./package.json').version")
+          tauri=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          for pair in "package.json:${pkg}" "tauri.conf.json:${tauri}"; do
+            name=${pair%%:*}
+            got=${pair#*:}
+            if [ "$got" != "$version" ]; then
+              echo "::error::${name} version '${got}' != VERSION '${version}'"
+              exit 1
+            fi
+          done
+
+          meta=$(sed -n '/<!-- release-meta/,/-->/s/^version:[[:space:]]*//p' README.md \
+            | head -1 | tr -d '[:space:]')
+          if [ "$meta" != "$version" ]; then
+            echo "::error::README release-meta version '${meta}' != VERSION '${version}'"
+            exit 1
+          fi
+
+          escaped=${version//./\\.}
+          if ! grep -qE "^## +${escaped}([[:space:]]|$|—| -)" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## ${version}' section"
+            exit 1
+          fi
+
+          for asset in \
+            Stria-Launcher-macos-arm64.dmg \
+            Stria-Launcher-windows-x64-setup.exe \
+            Stria-Launcher-linux-x86_64.AppImage \
+            Stria-Launcher-linux-x86_64.deb \
+            sha256sums.txt; do
+            grep -Fq "$asset" README.md || {
+              echo "::error::README.md lost the asset contract: ${asset}"
+              exit 1
+            }
+          done
+
+          for heading in "What's important right now" "Release and CI/CD"; do
+            grep -Fq "## ${heading}" README.md || {
+              echo "::error::README.md is missing the '${heading}' section (standard v1)"
+              exit 1
+            }
+          done
+          grep -Fq "CHANGELOG.md" README.md || {
+            echo "::error::README.md does not link its changelog"
+            exit 1
+          }
+
+          grep -q 'Release standard v1' RELEASING.md || {
+            echo "::error::RELEASING.md is not marked 'Release standard v1'"
+            exit 1
+          }
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            expected="v${version}"
+            if [ "${GITHUB_REF_NAME}" != "$expected" ]; then
+              echo "::error::tag '${GITHUB_REF_NAME}' must be '${expected}'"
+              exit 1
+            fi
+            echo "tag ${GITHUB_REF_NAME} matches VERSION ${version}"
+          fi
+
+          echo "release record OK: ${version}"
