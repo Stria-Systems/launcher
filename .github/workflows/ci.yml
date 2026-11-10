@@ -58,6 +58,11 @@ jobs:
       - name: Clippy (warnings denied)
         run: cargo clippy --all-targets -- -D warnings
 
+      # Contract gate: the launcher is the only writer of portal.json, so
+      # schemaVersion 2 + org/employee/device separation is release-critical.
+      - name: Identity contract (portal.json v2)
+        run: cargo test --workspace identity_tests
+
       - name: Tests
         run: cargo test --workspace
 
@@ -67,4 +72,4 @@ jobs:
           set -euo pipefail
           test -f ui/index.html || { echo "::error::ui/index.html missing"; exit 1; }
           test -f src-tauri/tauri.conf.json || { echo "::error::tauri.conf.json missing"; exit 1; }
-          echo "launcher frontend present ✓"
+          node ui/check-ui.mjs

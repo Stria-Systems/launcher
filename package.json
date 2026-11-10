@@ -6,7 +6,8 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "check:ui": "node ui/check-ui.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

@@ -11,17 +11,19 @@
     "windows": [
       {
         "title": "Stria",
-        "width": 760,
-        "height": 560,
-        "minWidth": 380,
-        "minHeight": 320,
+        "width": 960,
+        "height": 680,
+        "minWidth": 420,
+        "minHeight": 480,
         "resizable": true,
         "center": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'sha256-EPibJPzWmAyiju8CTmU+i57g4pVxf93FHWi35TOvQJ4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+      "csp": "default-src 'self'; script-src 'self' 'sha256-P3AtWaSGywQQzxCQ5QSDHZpPfP46/816uSXB6+Xa0zA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     }
   },
   "plugins": {

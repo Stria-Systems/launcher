@@ -3,450 +3,1113 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#070A09" />
   <title>Stria Launcher</title>
   <style>
+    /* Stria Launcher — the marketing site's system, carried into the native
+       window. Flat obsidian surfaces, one verdigris accent, General Sans for
+       display and Inter for text. No gradient, glass, mono face, or pill:
+       machine values use Inter with tabular figures.
+
+       Layout mirrors the portal's auth shell: a quiet brand panel beside the
+       form, a top bar that names the product, and a trust footer. The window
+       is 760×560 by default and 380×320 at its smallest; the split collapses
+       below 700px and the stage scrolls rather than clipping. */
+    @font-face {
+      font-family: "General Sans";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url("fonts/general-sans-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "General Sans";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url("fonts/general-sans-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Inter";
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: url("fonts/inter-var.woff2") format("woff2");
+    }
+
     :root {
-      --bg: #0a120d;
-      --bg-grad: linear-gradient(160deg, #0a120d 0%, #08100b 60%, #0c1610 100%);
-      --card: rgba(18, 30, 22, 0.72);
-      --border: rgba(126, 232, 176, 0.16);
-      --border-bright: rgba(126, 232, 176, 0.5);
-      --mint: #7ee8b0;
-      --mint-bright: #93f0c2;
-      --text: #e8f4ec;
-      --text-dim: rgba(232, 244, 236, 0.64);
-      --text-faint: rgba(232, 244, 236, 0.4);
-      --error: #f0a0a0;
-      --warn: #f0b060;
-      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      --sans: -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+      /* Surface hierarchy (HIG background levels). */
+      --surface: #070a09;
+      --surface-raised: #0e1311;
+      --surface-overlay: #161c19;
+      --surface-hover: #1f2723;
+      --border: rgba(233, 239, 235, 0.13);
+      --border-strong: rgba(233, 239, 235, 0.24);
+
+      --text: #e9efeb;
+      --text-secondary: #b4beb8;
+      --text-muted: #8c968f;
+      --text-disabled: #6b756f;
+
+      /* One accent. Green is a state signal, not a wash. */
+      --accent: #1c8465;
+      --accent-hover: #146b52;
+      --accent-active: #0c5f47;
+      --accent-on-dark: #45c79c;
+      --accent-tint: rgba(69, 199, 156, 0.1);
+      --accent-line: rgba(69, 199, 156, 0.55);
+      --warning: #c9a24c;
+      --error: #e0916f;
+      --info: #5aa0f2;
+
+      --display: "General Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+      --sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      /* There is no mono face in this system. */
+      --data: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+      --radius-xs: 2px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+
+      --s1: 4px;
+      --s2: 8px;
+      --s3: 12px;
+      --s4: 16px;
+      --s5: 20px;
+      --s6: 24px;
+      --s8: 32px;
+      --s10: 40px;
+
+      --focus-ring: 0 0 0 2px var(--surface-raised), 0 0 0 4px var(--accent-on-dark);
+      --shadow-raised: 0 8px 24px -8px rgba(0, 0, 0, 0.28);
+      --fast: 140ms ease;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
-    }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
     body {
       font-family: var(--sans);
-      background: var(--bg-grad);
+      font-size: 14px;
+      line-height: 1.55;
+      background: var(--surface);
       color: var(--text);
-      display: flex;
-      align-items: stretch;
-      justify-content: center;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
-    .card {
-      flex: 1;
-      width: 100%;
+    ::selection { background: var(--accent-tint); color: var(--text); }
+
+    .app {
       height: 100%;
-      max-width: 720px;
-      border: 1px solid var(--border);
-      border-radius: 0;
-      background: var(--card);
-      padding: clamp(20px, 5vw, 48px) clamp(16px, 4vw, 40px);
-      box-shadow: 0 24px 56px -32px rgba(0, 0, 0, 0.6);
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      background: var(--surface);
     }
-    .eyebrow {
-      color: var(--mint);
-      font-size: clamp(9px, 1.8vw, 11px);
+
+    /* ── Top bar ───────────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s4);
+      padding: var(--s3) var(--s6);
+      border-bottom: 1px solid var(--border);
+    }
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      min-width: 0;
+    }
+    .brand-mark {
+      display: block;
+      flex-shrink: 0;
+      color: var(--accent-on-dark);
+    }
+    .brand-name {
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .brand-name span { color: var(--text-muted); font-weight: 500; }
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+      min-width: 0;
+    }
+    .env-tag {
+      font-family: var(--sans);
+      font-size: 10px;
+      font-weight: 600;
       letter-spacing: 0.14em;
       text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .env-tag.staging { color: var(--warning); border-color: rgba(201, 162, 76, 0.4); }
+    .env-tag.development { color: var(--info); border-color: rgba(90, 160, 242, 0.4); }
+    .top-link {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color var(--fast);
+    }
+    .top-link:hover { color: var(--text); }
+
+    /* ── Stage ─────────────────────────────────────────────────────── */
+    .stage {
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: var(--s4) var(--s6);
+    }
+    .stage::-webkit-scrollbar { width: 10px; }
+    .stage::-webkit-scrollbar-thumb {
+      background: var(--surface-hover);
+      border-radius: var(--radius-sm);
+      border: 3px solid var(--surface);
+    }
+
+    /* ── Setup: brand panel + form, the portal's auth shell ────────── */
+    .setup-card {
+      width: 100%;
+      max-width: 1040px;
+      margin-block: auto;
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--surface-raised);
+    }
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: var(--s3);
+      padding: var(--s6);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      min-width: 0;
+    }
+    .kicker {
+      font-size: 11px;
       font-weight: 600;
-      margin-bottom: clamp(4px, 1vw, 8px);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent-on-dark);
+    }
+    .side-title {
+      font-family: var(--display);
+      font-size: clamp(22px, 3vw, 30px);
+      line-height: 1.1;
+      letter-spacing: -0.025em;
+      font-weight: 500;
+      color: var(--text);
+      text-wrap: balance;
+    }
+    .side-title em { font-style: normal; color: var(--accent-on-dark); }
+    .side-lede {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      max-width: 34ch;
+    }
+    .side-list {
+      list-style: none;
+      border-top: 1px solid var(--border);
+      margin-top: var(--s1);
+    }
+    .side-list li {
+      display: grid;
+      gap: 2px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(233, 239, 235, 0.08);
+    }
+    .side-list .k {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+    .side-list .v {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-muted);
+    }
+    .side-trust {
+      margin-top: var(--s1);
+      padding-top: var(--s3);
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+
+    .form-panel {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: var(--s4);
+      min-width: 0;
+    }
+    .eyebrow {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent-on-dark);
+      margin-bottom: var(--s2);
     }
     h1 {
-      font-size: clamp(17px, 3.5vw, 24px);
+      font-family: var(--display);
+      font-size: clamp(20px, 2.4vw, 25px);
+      line-height: 1.12;
+      letter-spacing: -0.02em;
       font-weight: 600;
-      margin-bottom: clamp(4px, 0.8vw, 6px);
-      color: #f2f9f4;
+      color: var(--text);
+      margin-bottom: 6px;
+      text-wrap: balance;
     }
     h2 {
-      font-size: clamp(13px, 2.5vw, 16px);
+      font-family: var(--display);
+      font-size: 15px;
+      line-height: 1.3;
       font-weight: 600;
-      margin-bottom: clamp(3px, 0.6vw, 6px);
-      color: #f2f9f4;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-bottom: 4px;
     }
     .sub {
-      color: var(--text-dim);
-      font-size: clamp(11px, 2.2vw, 14px);
+      font-size: 13px;
       line-height: 1.55;
-      margin-bottom: clamp(12px, 2.5vw, 20px);
+      color: var(--text-secondary);
+      margin-bottom: var(--s2);
+      max-width: 58ch;
     }
-    .sub-faint { color: var(--text-faint); font-size: clamp(10px, 1.8vw, 12px); line-height: 1.5; }
+    .sub-faint {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-muted);
+    }
+
+    /* ── Tabs: text with an accent rule, not a filled segment ──────── */
+    .link-machine {
+      margin: 0 0 18px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .link-machine h2 { font-size: 14px; margin: 2px 0 6px; }
+    .link-machine .sub-faint { margin: 0 0 10px; }
+    .link-machine .eyebrow { margin: 0 0 4px; }
+    .auth-tabs {
+      display: flex;
+      gap: var(--s6);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: var(--s3);
+    }
+    .auth-tab {
+      width: auto;
+      height: auto;
+      margin: 0;
+      padding: 9px 0;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color var(--fast), border-color var(--fast);
+    }
+    .auth-tab:hover { color: var(--text); }
+    .auth-tab.active {
+      color: var(--text);
+      border-bottom-color: var(--accent-on-dark);
+    }
+
+    /* ── Fields ────────────────────────────────────────────────────── */
     label {
       display: block;
-      font-size: clamp(10px, 1.8vw, 12px);
-      color: rgba(232,244,236,0.7);
-      margin: clamp(8px, 1.5vw, 12px) 0 clamp(2px, 0.5vw, 4px);
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin: var(--s2) 0 4px;
     }
     input {
       width: 100%;
-      background: rgba(5, 11, 7, 0.7);
+      height: 40px;
+      background: var(--surface-overlay);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      color: #f2f9f4;
-      font-size: clamp(12px, 2.2vw, 14px);
-      padding: clamp(8px, 1.5vw, 12px) clamp(10px, 1.8vw, 14px);
-      outline: none;
-      font-family: var(--sans);
-    }
-    input:focus { border-color: var(--border-bright); }
-    button {
-      width: 100%;
-      margin-top: clamp(10px, 2vw, 16px);
-      background: var(--mint);
-      border: none;
-      border-radius: 10px;
-      color: #06130b;
-      font-size: clamp(12px, 2.2vw, 14px);
-      font-weight: 600;
-      padding: clamp(9px, 1.8vw, 13px);
-      cursor: pointer;
-      font-family: var(--sans);
-    }
-    button:hover { background: var(--mint-bright); }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-    button.secondary {
-      background: transparent;
-      border: 1px solid rgba(126, 232, 176, 0.3);
-      color: var(--mint);
-    }
-    button.secondary:hover { background: rgba(126, 232, 176, 0.08); }
-    .status {
-      margin-top: clamp(8px, 1.5vw, 12px);
-      font-size: clamp(10px, 2vw, 13px);
-      color: var(--mint);
-      min-height: clamp(14px, 2.5vw, 18px);
-    }
-    .status.err { color: var(--error); }
-    .status.warn { color: var(--warn); }
-    .pairing {
-      margin-top: clamp(12px, 2.5vw, 20px);
-      border-top: 1px solid rgba(126,232,176,0.1);
-      padding-top: clamp(10px, 2vw, 16px);
-    }
-    code {
-      font-family: var(--mono);
-      font-size: clamp(12px, 2.2vw, 14px);
-      letter-spacing: 0.08em;
-      color: var(--mint);
-    }
-    /* Software hub */
-    #hub { display: none; }
-    .pkg {
-      border: 1px solid rgba(126, 232, 176, 0.12);
-      border-radius: 12px;
-      padding: clamp(10px, 2vw, 16px);
-      margin-bottom: clamp(6px, 1.2vw, 10px);
-      background: rgba(126, 232, 176, 0.02);
-    }
-    .pkg-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: clamp(2px, 0.5vw, 4px);
-      gap: 8px;
-    }
-    .pkg-name { font-weight: 600; font-size: clamp(12px, 2.2vw, 14px); }
-    .pkg-desc { font-size: clamp(10px, 1.8vw, 12px); color: var(--text-faint); margin-bottom: clamp(4px, 1vw, 8px); }
-    .pkg-status {
-      font-size: clamp(8px, 1.5vw, 10px);
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .pkg-status.installed { background: rgba(126,232,176,0.15); color: var(--mint); }
-    .pkg-status.available { background: rgba(255,180,80,0.15); color: var(--warn); }
-    .pkg-status.pending { background: rgba(126,232,176,0.08); color: var(--text-faint); }
-    .pkg-meta {
-      font-size: clamp(9px, 1.6vw, 11px);
-      color: var(--text-faint);
-      font-family: var(--mono);
-      margin-bottom: clamp(4px, 1vw, 8px);
-    }
-    .pkg button { margin-top: 0; font-size: clamp(11px, 2vw, 13px); padding: clamp(6px, 1.2vw, 10px); }
-    .pkg-actions { display: flex; gap: clamp(4px, 0.8vw, 8px); margin-top: clamp(4px, 1vw, 8px); }
-    .pkg-actions button { flex: 1; }
-    .progress {
-      margin-top: clamp(4px, 1vw, 8px);
-      height: clamp(2px, 0.4vw, 4px);
-      background: rgba(126,232,176,0.1);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    .progress-bar { height: 100%; background: var(--mint); width: 0%; transition: width 0.3s; }
-    .hub-actions {
-      display: flex;
-      gap: clamp(6px, 1.2vw, 10px);
-      margin-top: clamp(10px, 2vw, 16px);
-    }
-    .hub-actions button { margin-top: 0; }
-    .empty-state { text-align: center; padding: clamp(12px, 3vw, 24px) 0; }
-    .empty-state .icon { font-size: clamp(20px, 4vw, 32px); margin-bottom: clamp(4px, 1vw, 8px); }
-    .empty-state .title { font-weight: 600; font-size: clamp(12px, 2.2vw, 14px); margin-bottom: clamp(2px, 0.5vw, 4px); }
-    .empty-state .desc { font-size: clamp(10px, 1.8vw, 12px); color: var(--text-faint); }
-    /* Auth tabs */
-    .auth-tabs {
-      display: flex;
-      gap: clamp(4px, 0.8vw, 8px);
-      margin-bottom: clamp(12px, 2.5vw, 20px);
-      border-bottom: 1px solid rgba(126, 232, 176, 0.12);
-      padding-bottom: clamp(4px, 0.8vw, 8px);
-    }
-    .auth-tab {
-      background: transparent;
-      border: none;
-      color: var(--text-dim);
-      font-size: clamp(11px, 2vw, 13px);
-      font-weight: 500;
-      padding: clamp(6px, 1.2vw, 10px) clamp(10px, 2vw, 16px);
-      cursor: pointer;
-      border-radius: 8px 8px 0 0;
-      width: auto;
-      margin: 0;
-      flex: 1;
-      text-align: center;
-      transition: color 0.15s, background 0.15s;
-    }
-    .auth-tab:hover {
+      border-radius: var(--radius-md);
       color: var(--text);
-      background: rgba(126, 232, 176, 0.04);
+      font-family: var(--sans);
+      font-size: 14px;
+      padding: 0 var(--s3);
+      outline: none;
+      transition: border-color var(--fast), box-shadow var(--fast);
     }
-    .auth-tab.active {
-      color: var(--mint);
-      background: rgba(126, 232, 176, 0.08);
-      font-weight: 600;
+    input::placeholder { color: var(--text-muted); }
+    input:focus {
+      border-color: var(--accent-on-dark);
+      box-shadow: 0 0 0 2px rgba(69, 199, 156, 0.22);
     }
-    /* ── Brand header: Stria triangle mark + wordmark + env pill ── */
-    .brand-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: clamp(10px, 2vw, 16px);
-    }
-    .brand-mark { flex-shrink: 0; display: block; }
-    .brand-name {
-      font-size: clamp(12px, 2.2vw, 14px);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      color: #f2f9f4;
-    }
-    .brand-name span { color: var(--text-faint); font-weight: 400; }
-    .env-pill {
-      margin-left: auto;
-      font-size: clamp(8px, 1.5vw, 10px);
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 3px 9px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      color: var(--text-faint);
-      white-space: nowrap;
-    }
-    .env-pill.staging { color: var(--warn); border-color: rgba(240, 176, 96, 0.4); }
-    .env-pill.development { color: #9ecfff; border-color: rgba(158, 207, 255, 0.4); }
-    /* ── Second-factor + enrollment panels ── */
-    #twofa-panel, #enroll-panel { display: none; }
-    .panel-box {
-      margin-top: clamp(10px, 2vw, 16px);
-      border: 1px solid rgba(126, 232, 176, 0.2);
-      border-radius: 12px;
-      padding: clamp(10px, 2vw, 16px);
-      background: rgba(126, 232, 176, 0.04);
-    }
-    .panel-box h2 { margin-bottom: clamp(2px, 0.5vw, 4px); }
-    .secret {
-      font-family: var(--mono);
-      font-size: clamp(12px, 2.2vw, 14px);
-      letter-spacing: 0.06em;
-      color: var(--mint);
-      word-break: break-all;
-      margin: clamp(6px, 1.2vw, 10px) 0;
-    }
-    .recovery-list { margin: clamp(6px, 1.2vw, 10px) 0; }
-    .recovery-list code {
-      display: block;
-      margin-top: 3px;
-    }
+    input:disabled { color: var(--text-disabled); }
     .input-wrap { position: relative; }
-    .input-wrap input { padding-right: 64px; }
+    .input-wrap input { padding-right: 58px; }
     .show-toggle {
       position: absolute;
-      right: 6px;
+      right: 4px;
       top: 50%;
       transform: translateY(-50%);
       width: auto;
+      height: 30px;
       margin: 0;
-      padding: 6px 10px;
-      background: transparent;
+      padding: 0 8px;
+      background: none;
       border: none;
-      color: var(--text-faint);
-      font-size: clamp(10px, 1.8vw, 12px);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-family: var(--sans);
+      font-size: 12px;
       font-weight: 500;
+      cursor: pointer;
     }
-    .show-toggle:hover { background: transparent; color: var(--mint); }
+    .show-toggle:hover { color: var(--text); }
+
+    /* ── Buttons: 40px, 8px radius, one primary per view ───────────── */
+    button {
+      width: 100%;
+      height: 40px;
+      margin-top: var(--s3);
+      padding: 0 var(--s4);
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--fast), border-color var(--fast),
+        color var(--fast);
+    }
+    button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    #submit, #login-submit, #twofa-verify, #enroll-confirm, #link-machine-start, #launch-btn,
+    #install-all-btn {
+      background: var(--accent);
+      color: #ffffff;
+    }
+    #submit:hover, #login-submit:hover, #twofa-verify:hover,
+    #enroll-confirm:hover, #link-machine-start:hover, #launch-btn:hover,
+    #install-all-btn:hover {
+      background: var(--accent-hover);
+    }
+    #submit:active, #login-submit:active, #twofa-verify:active,
+    #enroll-confirm:active, #link-machine-start:active, #launch-btn:active,
+    #install-all-btn:active {
+      background: var(--accent-active);
+    }
+    button:disabled {
+      cursor: not-allowed;
+      background: rgba(28, 132, 101, 0.4);
+      color: rgba(255, 255, 255, 0.7);
+    }
+    button.secondary, .auth-tab, .show-toggle, .link-row button {
+      background: transparent;
+    }
+    button.secondary {
+      border: 1px solid var(--border-strong);
+      color: var(--text);
+    }
+    button.secondary:hover {
+      background: var(--accent-tint);
+      border-color: var(--accent-line);
+    }
+    button.secondary:active { background: rgba(69, 199, 156, 0.16); }
+    button.secondary:disabled {
+      background: transparent;
+      color: var(--text-disabled);
+      border-color: var(--border);
+    }
+
+    /* ── Status + secondary panels ─────────────────────────────────── */
+    .status {
+      margin-top: var(--s2);
+      min-height: 0;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      overflow-wrap: anywhere;
+    }
+    .status:empty { display: none; }
+    .status.err { color: var(--error); }
+    .status.warn { color: var(--warning); }
+    #resend-email {
+      width: auto;
+      height: auto;
+      margin: var(--s1) 0 0;
+      padding: 0;
+      align-self: flex-start;
+      background: none;
+      border: none;
+      border-radius: 0;
+      color: var(--accent);
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 500;
+      text-align: left;
+    }
+    #resend-email:hover { color: var(--text); background: none; }
+    #resend-email:focus-visible {
+      box-shadow: none;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .panel-box {
+      margin-top: var(--s4);
+      padding: var(--s4);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+    #twofa-panel, #enroll-panel { display: none; }
+
+    .secret {
+      font-family: var(--data);
+      font-variant-numeric: tabular-nums;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      color: var(--accent-on-dark);
+      word-break: break-all;
+      margin: var(--s3) 0;
+      padding: 10px var(--s3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface-overlay);
+    }
+    .recovery-list { margin: var(--s3) 0; }
+    .recovery-list code {
+      display: block;
+      font-family: var(--data);
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      line-height: 1.9;
+      color: var(--text);
+    }
     .link-row {
-      margin-top: clamp(6px, 1.2vw, 10px);
-      font-size: clamp(10px, 1.8vw, 12px);
-      color: var(--text-faint);
+      margin-top: var(--s3);
+      font-size: 12px;
+      color: var(--text-muted);
       text-align: center;
     }
     .link-row button {
+      display: inline;
       width: auto;
+      height: auto;
       margin: 0;
       padding: 0;
-      background: none;
       border: none;
-      color: var(--mint);
+      border-radius: 0;
+      background: none;
+      color: var(--accent-on-dark);
       font-size: inherit;
       font-weight: 500;
       text-decoration: underline;
       text-underline-offset: 2px;
-      cursor: pointer;
-      display: inline;
     }
-    .trust-row {
-      margin-top: auto;
-      padding-top: clamp(12px, 2.5vw, 20px);
-      font-size: clamp(9px, 1.6vw, 11px);
-      color: var(--text-faint);
+    .link-row button:hover { color: var(--text); }
+    .link-row button:focus-visible { box-shadow: none; text-decoration-thickness: 2px; }
+
+    .pairing {
+      margin-top: var(--s3);
+      padding-top: var(--s3);
+      border-top: 1px solid var(--border);
+    }
+    .pairing h2 { font-size: 14px; }
+    .pairing-toggle {
+      width: auto;
+      height: auto;
+      margin-top: var(--s2);
+      padding: 0;
+      background: none;
+      border: none;
+      border-radius: 0;
+      color: var(--accent-on-dark);
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 500;
+      text-align: left;
+    }
+    .pairing-toggle:hover { color: var(--text); }
+    .pairing-toggle:focus-visible { box-shadow: none; text-decoration: underline; text-underline-offset: 2px; }
+
+    /* ── Software hub ──────────────────────────────────────────────── */
+    #hub { display: none; }
+    .hub-card {
+      width: 100%;
+      max-width: 1040px;
+      margin-block: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface-raised);
+      padding: var(--s5);
+    }
+    .hub-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--s4);
+      margin-bottom: var(--s3);
+    }
+    .hub-head .sub { display: none; }
+    .hub-identity {
+      font-family: var(--data);
+      font-variant-numeric: tabular-nums;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      overflow-wrap: anywhere;
+    }
+    #pkg-list { display: flex; flex-direction: column; gap: var(--s2); }
+    .pkg {
+      display: grid;
+      gap: 4px;
+      padding: var(--s3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+    .pkg-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s2);
+    }
+    .pkg-name {
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .pkg-status {
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 3px 7px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .pkg-status.installed {
+      color: var(--accent-on-dark);
+      border-color: var(--accent-line);
+      background: var(--accent-tint);
+    }
+    .pkg-status.available {
+      color: var(--warning);
+      border-color: rgba(201, 162, 76, 0.4);
+    }
+    .pkg-status.pending { color: var(--text-muted); }
+    .pkg-meta {
+      font-family: var(--data);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--text-muted);
+      overflow-wrap: anywhere;
+    }
+    .pkg-actions { display: flex; gap: var(--s2); margin-top: 2px; }
+    .pkg-actions button { width: auto; margin-top: 0; height: 32px; font-size: 13px; }
+    .install-btn.done {
+      color: var(--accent-on-dark);
+      border-color: var(--accent-line);
+      background: var(--accent-tint);
+      opacity: 1;
+    }
+    .progress {
+      height: 3px;
+      margin-top: 2px;
+      background: var(--surface-overlay);
+      border-radius: var(--radius-xs);
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--accent-on-dark);
+      transition: width 300ms ease;
+    }
+    .hub-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s2);
+      margin-top: var(--s3);
+      padding-top: var(--s3);
+      border-top: 1px solid var(--border);
+    }
+    .hub-actions button { width: auto; margin-top: 0; height: 36px; }
+    #stop-btn { color: var(--error); border-color: rgba(224, 145, 111, 0.4); }
+    .empty-state {
+      padding: var(--s8) var(--s4);
       text-align: center;
-      line-height: 1.6;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+    .empty-state .icon {
+      font-size: 20px;
+      color: var(--accent-on-dark);
+      margin-bottom: var(--s2);
+    }
+    .empty-state .title {
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .empty-state .desc { font-size: 12px; color: var(--text-muted); }
+
+    /* ── Footer ────────────────────────────────────────────────────── */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s4);
+      padding: var(--s2) var(--s6);
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .footer nav { display: flex; gap: var(--s4); }
+    .footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color var(--fast);
+    }
+    .footer a:hover { color: var(--text); }
+
+    /* ── Responsive: the conversation is the content, chrome yields ── */
+    @media (max-width: 700px) {
+      .topbar { padding: var(--s2) var(--s4); }
+      .stage { padding: var(--s3) var(--s4); align-items: flex-start; }
+      .setup-card { grid-template-columns: minmax(0, 1fr); }
+      .side-panel {
+        padding: var(--s4);
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        gap: var(--s2);
+      }
+      .side-title { font-size: 19px; }
+      .side-lede { display: none; }
+      .side-list { display: none; }
+      .form-panel { padding: var(--s4); }
+      .hub-card { padding: var(--s4); }
+      .footer { padding: var(--s2) var(--s4); }
+      .footer nav { display: none; }
+    }
+    @media (max-height: 460px) {
+      .footer { display: none; }
+      .stage { align-items: flex-start; padding: var(--s2) var(--s4); }
+      .side-lede, .side-list, .side-trust { display: none; }
+      .form-panel { padding: var(--s4); }
+    }
+    /* ── macOS + portal-paper shell ──────────────────────────────────
+       The portal's auth screen is the reference: warm paper, obsidian
+       brand panel, white form surface, one verdigris accent. The old
+       all-dark launcher read as a web panel; this reads as a Mac app
+       that belongs beside the portal. */
+    :root {
+      --paper: #f4f5f2;
+      --paper-raised: #ffffff;
+      --ink: #070a09;
+      --surface: #f4f5f2;
+      --surface-raised: #ffffff;
+      --surface-overlay: #f4f5f2;
+      --surface-hover: #e7eae5;
+      --border: rgba(7, 10, 9, 0.13);
+      --border-strong: rgba(7, 10, 9, 0.24);
+      --text: #070a09;
+      --text-secondary: #3c4441;
+      --text-muted: #4a534f;
+      --text-disabled: #7a837e;
+      --accent: #1c8465;
+      --accent-hover: #146b52;
+      --accent-active: #0c5f47;
+      --accent-on-dark: #0c5f47;
+      --accent-tint: rgba(28, 132, 101, 0.1);
+      --accent-line: rgba(12, 95, 71, 0.55);
+      --warning: #8a6a1f;
+      --error: #b96a48;
+      --shadow-raised: 0 24px 60px -40px rgba(7, 10, 9, 0.35);
+      --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px #1c8465;
+    }
+    body { background: var(--paper); color: var(--ink); }
+    .app { background: var(--paper); }
+    .topbar {
+      background: var(--paper);
+      border-bottom-color: var(--border);
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+    .brand-mark { color: var(--accent); }
+    .brand-name { color: var(--ink); }
+    .brand-name span { color: var(--text-muted); }
+    .env-tag { background: #ffffff; color: var(--text-muted); border-color: var(--border); }
+    .top-link { color: var(--text-muted); }
+    .stage { padding: 20px 24px; }
+    .stage::-webkit-scrollbar-thumb { background: #d5dad3; border-color: var(--paper); }
+    .setup-card {
+      background: var(--paper-raised);
+      border-color: var(--border);
+      box-shadow: var(--shadow-raised);
+      grid-template-columns: 380px minmax(0, 1fr);
+      max-width: 1000px;
+    }
+    .side-panel {
+      --text: #e9efeb;
+      --text-secondary: #b4beb8;
+      --text-muted: #8c968f;
+      background: #070a09;
+      border-right-color: rgba(69, 199, 156, 0.14);
+      padding: 30px 28px;
+    }
+    .side-panel .kicker { color: #45c79c; }
+    .side-panel .side-title { color: #f2f7f3; }
+    .side-panel .side-title em { color: #45c79c; }
+    .side-panel .side-lede { color: rgba(228, 238, 231, 0.72); }
+    .side-panel .side-list { border-top-color: rgba(233, 239, 235, 0.13); }
+    .side-panel .side-list li { border-bottom-color: rgba(233, 239, 235, 0.09); }
+    .side-panel .side-list .k { color: #ecf4ee; }
+    .side-panel .side-list .v { color: rgba(228, 238, 231, 0.62); }
+    .side-panel .side-trust { color: rgba(228, 238, 231, 0.55); border-top-color: rgba(233, 239, 235, 0.13); }
+    .form-panel { background: #ffffff; padding: 30px 34px; }
+    .eyebrow { color: var(--accent); }
+    h1, h2 { color: var(--ink); }
+    .sub { color: var(--text-secondary); }
+    .sub-faint { color: var(--text-muted); }
+    .auth-tabs { border-bottom-color: var(--border); }
+    .auth-tab { color: var(--text-muted); }
+    .auth-tab:hover { color: var(--ink); }
+    .auth-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+    label { color: var(--text-secondary); }
+    input {
+      background: #ffffff;
+      border-color: var(--border-strong);
+      color: var(--ink);
+    }
+    input::placeholder { color: var(--text-disabled); }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(28, 132, 101, 0.16);
+    }
+    .show-toggle { color: var(--text-muted); }
+    .show-toggle:hover { color: var(--ink); }
+    button.secondary { background: #ffffff; border-color: var(--border-strong); color: var(--ink); }
+    button.secondary:hover { background: var(--accent-tint); border-color: var(--accent-line); }
+    .panel-box { background: var(--paper); border-color: var(--border); }
+    .secret { background: var(--paper); color: var(--accent); border-color: var(--border); }
+    .status { color: var(--text-secondary); }
+    .status.err { color: var(--error); }
+    .pairing { border-top-color: var(--border); }
+    .pairing-toggle { color: var(--accent); }
+    .pairing-toggle:hover { color: var(--ink); }
+    .trust-row { color: var(--text-muted); border-top-color: var(--border); }
+    .trust-row strong { color: var(--text-secondary); }
+    .footer { background: var(--paper); color: var(--text-muted); border-top-color: var(--border); }
+    .footer a { color: var(--text-muted); }
+    .hub-card { background: var(--paper-raised); box-shadow: var(--shadow-raised); }
+    .hub-identity { color: var(--text-muted); }
+    .pkg { background: var(--paper); border-color: var(--border); }
+    .pkg-status { color: var(--text-muted); }
+    .pkg-meta { color: var(--text-muted); }
+    .empty-state { background: var(--paper); }
+
+    /* Paired-account recall: a quiet paper strip above the tabs, never a
+       second login form. */
+    .account {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 16px;
+      padding: 10px 12px;
+      border: 1px solid rgba(12, 95, 71, 0.24);
+      border-radius: 10px;
+      background: #e7eae5;
+    }
+    .account[hidden] { display: none; }
+    .account-copy { min-width: 0; }
+    .account-kicker {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .account-email {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      overflow-wrap: anywhere;
+    }
+    .account-org {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      overflow-wrap: anywhere;
+    }
+    .account-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .account-actions button {
+      width: auto;
+      height: 30px;
+      margin: 0;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    /* macOS overlay title bar: traffic lights sit in the topbar, so the
+       brand starts clear of them and the bar itself drags the window. */
+    body.platform-macos .topbar {
+      min-height: 52px;
+      padding-left: 88px;
+      -webkit-app-region: drag;
+    }
+    body.platform-macos .topbar a,
+    body.platform-macos .topbar button {
+      -webkit-app-region: no-drag;
+    }
+
+    @media (max-width: 700px) {
+      .account { align-items: flex-start; flex-direction: column; }
+      .account-actions { width: 100%; }
+      .account-actions button { flex: 1; }
+      .form-panel { padding: 24px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
     }
   </style>
 </head>
 <body>
-  <!-- Registration + pairing view -->
-  <div class="card" id="setup">
-    <div class="brand-row">
-      <!-- Stria triangle mark: outline + 3 spokes + 4 nodes, same geometry
-           as the portal wordmark, stroked in launcher mint for obsidian. -->
-      <svg class="brand-mark" width="26" height="26" viewBox="-8 -6 236 252" fill="none" aria-hidden="true">
-        <path d="M 208.6 117.8 L 14.8 227.5 L 14.8 8.1 Z" stroke="#7ee8b0" stroke-width="14" stroke-linejoin="round" />
-        <g stroke="#7ee8b0" stroke-width="9" stroke-linecap="round" opacity="0.65">
-          <line x1="78.6" y1="116.3" x2="15.3" y2="6.6" />
-          <line x1="79.4" y1="118.5" x2="15.3" y2="228.8" />
-          <line x1="79.4" y1="116.7" x2="209.4" y2="116.8" />
-        </g>
-        <g fill="#7ee8b0">
-          <circle cx="76.9" cy="117.7" r="16" />
-          <circle cx="16.5" cy="11.1" r="14" />
-          <circle cx="16.5" cy="226.3" r="14" />
-          <circle cx="205.6" cy="117.7" r="16" />
-        </g>
-      </svg>
-      <span class="brand-name">Stria <span>Launcher</span></span>
-      <span class="env-pill" id="env-pill" title="Which portal this launcher signs into">…</span>
-    </div>
-    <p class="eyebrow" id="auth-eyebrow">Stria Launcher</p>
-    <h1 id="auth-title">Sign in to your organization.</h1>
-    <p class="sub" id="auth-sub">
-      One workspace holds your objectives, evidence, run history, costs, and
-      machines. The launcher installs Stria Works — Stria-Pi runtime inside —
-      and keeps every machine on your workspace's pinned version.
-    </p>
-
-    <!-- Tab toggle -->
-    <div class="auth-tabs">
-      <button class="auth-tab" id="tab-create">Create workspace</button>
-      <button class="auth-tab active" id="tab-signin">Sign in</button>
-    </div>
-
-    <!-- Create workspace form -->
-    <form id="reg" style="display:none">
-      <label for="email">Work email</label>
-      <input id="email" type="email" autocomplete="email" placeholder="you@company.com" required />
-      <label for="org">Organization name</label>
-      <input id="org" type="text" autocomplete="organization" placeholder="Acme Inc." required />
-      <label for="pass">Password (10+ characters)</label>
-      <div class="input-wrap">
-        <input id="pass" type="password" autocomplete="new-password" minlength="10" placeholder="Choose something strong" required />
-        <button type="button" class="show-toggle" data-for="pass">Show</button>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <!-- Stria mark: outline triangle + three spokes + four nodes, the
+             same geometry as the site and portal wordmark. -->
+        <svg class="brand-mark" width="22" height="22" viewBox="-8 -6 236 252" fill="none" aria-hidden="true">
+          <path d="M 208.6 117.8 L 14.8 227.5 L 14.8 8.1 Z" stroke="currentColor" stroke-width="14" stroke-linejoin="round" />
+          <g stroke="currentColor" stroke-width="9" stroke-linecap="round" opacity="0.55">
+            <line x1="78.6" y1="116.3" x2="15.3" y2="6.6" />
+            <line x1="79.4" y1="118.5" x2="15.3" y2="228.8" />
+            <line x1="79.4" y1="116.7" x2="209.4" y2="116.8" />
+          </g>
+          <g fill="currentColor">
+            <circle cx="76.9" cy="117.7" r="16" />
+            <circle cx="16.5" cy="11.1" r="14" />
+            <circle cx="16.5" cy="226.3" r="14" />
+            <circle cx="205.6" cy="117.7" r="16" />
+          </g>
+        </svg>
+        <span class="brand-name">Stria <span>Launcher</span></span>
       </div>
-      <button type="submit" id="submit">Create workspace →</button>
-    </form>
+      <div class="topbar-right">
+        <span class="env-tag" id="env-pill" title="Which portal this launcher signs into">Production</span>
+        <a class="top-link" href="https://striasystems.com" target="_blank" rel="noreferrer">striasystems.com ↗</a>
+      </div>
+    </header>
 
-    <!-- Sign in form (default: operators sign into their organization here) -->
-    <form id="signin-form">
-      <div id="signin-creds">
-        <label for="login-email">Work email</label>
-        <input id="login-email" type="email" autocomplete="email" placeholder="you@company.com" required />
-        <label for="login-pass">Password</label>
-        <div class="input-wrap">
-          <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••••" required />
-          <button type="button" class="show-toggle" data-for="login-pass">Show</button>
+    <main class="stage">
+      <!-- Registration + pairing view -->
+      <section class="setup-card" id="setup">
+        <aside class="side-panel" aria-label="About Stria Works">
+          <p class="kicker">Stria Works</p>
+          <h2 class="side-title">Your machines, <em>on the record.</em></h2>
+          <p class="side-lede">
+            One environment for objectives, evidence, cost and approvals, held
+            against the organization each belongs to.
+          </p>
+          <ul class="side-list">
+            <li>
+              <span class="k">Install</span>
+              <span class="v">Stria Works and its runtime.</span>
+            </li>
+            <li>
+              <span class="k">Pair</span>
+              <span class="v">One code binds this machine.</span>
+            </li>
+            <li>
+              <span class="k">Hand off</span>
+              <span class="v">Updates and machine health stay here.</span>
+            </li>
+          </ul>
+          <p class="side-trust">HttpOnly session · workspace-scoped access · human approvals by policy</p>
+        </aside>
+
+        <div class="form-panel">
+          <p class="eyebrow" id="auth-eyebrow">Stria Launcher</p>
+          <h1 id="auth-title">Sign in to your organization.</h1>
+          <p class="sub" id="auth-sub">
+            Objectives, evidence, cost and machines — installed at your
+            workspace's pinned version.
+          </p>
+
+          <!-- A paired Mac already knows the account. Show it, prefill the
+               email, and make the portal identity the first thing to act on. -->
+          <div class="account" id="account" hidden>
+            <div class="account-copy">
+              <span class="account-kicker">Paired with this Mac</span>
+              <strong class="account-email" id="account-email"></strong>
+              <span class="account-org" id="account-org"></span>
+            </div>
+            <div class="account-actions">
+              <button type="button" id="account-open">Open hub →</button>
+              <button type="button" class="secondary" id="account-other">Use another account</button>
+            </div>
+          </div>
+
+          <div class="link-machine" id="link-machine">
+            <p class="eyebrow">Fastest link</p>
+            <h2>Link this Mac in your browser.</h2>
+            <p class="sub-faint">Sign in with your email code or GitHub. No password and no code to copy — the Launcher finishes on its own.</p>
+            <button type="button" id="link-machine-start">Link this Mac →</button>
+            <p class="sub-faint" id="link-machine-status"></p>
+          </div>
+
+          <!-- Tab toggle: returning operators land on sign-in first. -->
+          <div class="auth-tabs" role="tablist">
+            <button class="auth-tab active" id="tab-signin" role="tab">Sign in</button>
+            <button class="auth-tab" id="tab-create" role="tab">Create workspace</button>
+          </div>
+
+          <!-- Create workspace form -->
+          <form id="reg" style="display:none">
+            <label for="email">Work email</label>
+            <input id="email" type="email" autocomplete="email" placeholder="you@company.com" required />
+            <label for="org">Organization name</label>
+            <input id="org" type="text" autocomplete="organization" placeholder="Acme Inc." required />
+            <label for="pass">Password (10+ characters)</label>
+            <div class="input-wrap">
+              <input id="pass" type="password" autocomplete="new-password" minlength="10" placeholder="Choose something strong" required />
+              <button type="button" class="show-toggle" data-for="pass">Show</button>
+            </div>
+            <button type="submit" id="submit">Create workspace →</button>
+          </form>
+
+          <!-- Sign in form (default: operators sign into their organization here) -->
+          <form id="signin-form">
+            <div id="signin-creds">
+              <label for="login-email">Work email</label>
+              <input id="login-email" type="email" autocomplete="email" placeholder="you@company.com" required />
+              <label for="login-pass">Password</label>
+              <div class="input-wrap">
+                <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••••" required />
+                <button type="button" class="show-toggle" data-for="login-pass">Show</button>
+              </div>
+              <button type="submit" id="login-submit">Sign in to workspace →</button>
+            </div>
+
+            <!-- Second factor: every fresh sign-in on an enrolled account lands
+                 here — relogin after logout, expired session, or a new machine
+                 pairing all ask for a new code. No trusted-device bypass. -->
+            <div id="twofa-panel" class="panel-box">
+              <h2>Check your authenticator.</h2>
+              <p class="sub-faint" id="twofa-sub">Signing in. Enter the 6-digit code from your authenticator app.</p>
+              <label for="twofa-code" id="twofa-label">6-digit code</label>
+              <input id="twofa-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" />
+              <button type="button" id="twofa-verify">Verify and sign in →</button>
+              <p class="link-row">
+                <button type="button" id="twofa-recovery-toggle">Lost access? Use a recovery code</button>
+                <span> · </span>
+                <button type="button" id="twofa-restart">Start over</button>
+              </p>
+            </div>
+
+            <!-- First-time enrollment: the workspace requires two-factor but
+                 this account has no authenticator yet. -->
+            <div id="enroll-panel" class="panel-box">
+              <h2>Secure your workspace.</h2>
+              <p class="sub-faint">Your organization requires two-factor sign-in. Add this key to your authenticator app (1Password, Authy, Google Authenticator), then confirm with a code.</p>
+              <div class="secret" id="enroll-secret"></div>
+              <label for="enroll-code">6-digit code</label>
+              <input id="enroll-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" />
+              <button type="button" id="enroll-confirm">Confirm and continue →</button>
+              <div id="enroll-recovery" style="display:none">
+                <p class="sub-faint">Recovery codes — shown <strong>once</strong>, one use each. Save them somewhere safe.</p>
+                <div class="recovery-list" id="enroll-codes"></div>
+                <button type="button" id="enroll-done" class="secondary">Saved — back to sign in →</button>
+              </div>
+            </div>
+          </form>
+
+          <p class="status" id="status"></p>
+          <button class="secondary resend" id="resend-email" style="display:none">Resend verification email</button>
+          <button class="secondary" id="auth-switch" style="display:none"></button>
+
+          <button type="button" class="pairing-toggle" id="pairing-toggle">Have a pairing code? Pair instead →</button>
+          <div class="pairing" id="pairing-panel" style="display:none">
+            <h2>Sign in and pair</h2>
+            <p class="sub-faint">Enter the email on your Stria account and we'll send a six-digit sign-in code. No password, no portal login.</p>
+            <label for="pair-email">Work email</label>
+            <input id="pair-email" type="email" autocomplete="email" placeholder="you@company.com" />
+            <button type="button" class="secondary" id="email-code">Email me a sign-in code</button>
+            <p class="sub-faint" id="pair-email-status"></p>
+            <label for="email-code-value">Six-digit code from the email</label>
+            <input id="email-code-value" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" />
+            <button type="button" class="secondary" id="email-code-verify">Sign in &amp; pair</button>
+            <label for="code">Or paste a pairing code (AAA-BBB-CCC)</label>
+            <input id="code" type="text" autocomplete="off" placeholder="AAA-BBB-CCC" />
+          </div>
         </div>
-        <button type="submit" id="login-submit">Sign in to workspace →</button>
-      </div>
+      </section>
 
-      <!-- Second factor: every fresh sign-in on an enrolled account lands
-           here — relogin after logout, expired session, or a new machine
-           pairing all ask for a new code. No trusted-device bypass. -->
-      <div id="twofa-panel" class="panel-box">
-        <h2>Check your authenticator.</h2>
-        <p class="sub-faint" id="twofa-sub">Signing in. Enter the 6-digit code from your authenticator app.</p>
-        <label for="twofa-code" id="twofa-label">6-digit code</label>
-        <input id="twofa-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" />
-        <button type="button" id="twofa-verify">Verify and sign in →</button>
-        <p class="link-row">
-          <button type="button" id="twofa-recovery-toggle">Lost access? Use a recovery code</button>
-          <span> · </span>
-          <button type="button" id="twofa-restart">Start over</button>
-        </p>
-      </div>
-
-      <!-- First-time enrollment: the workspace requires two-factor but this
-           account has no authenticator yet. The setup challenge from sign-in
-           authorizes this panel and nothing else — no session until 2FA. -->
-      <div id="enroll-panel" class="panel-box">
-        <h2>Secure your workspace.</h2>
-        <p class="sub-faint">Your organization requires two-factor sign-in. Add this key to your authenticator app (1Password, Authy, Google Authenticator), then confirm with a code.</p>
-        <div class="secret" id="enroll-secret"></div>
-        <label for="enroll-code">6-digit code</label>
-        <input id="enroll-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" />
-        <button type="button" id="enroll-confirm">Confirm and continue →</button>
-        <div id="enroll-recovery" style="display:none">
-          <p class="sub-faint">Recovery codes — shown <strong>once</strong>, one use each. Save them somewhere safe.</p>
-          <div class="recovery-list" id="enroll-codes"></div>
-          <button type="button" id="enroll-done" class="secondary">Saved — back to sign in →</button>
+      <!-- Software hub view (shown after pairing) -->
+      <section class="hub-card" id="hub">
+        <div class="hub-head">
+          <div>
+            <p class="eyebrow">Stria Software Hub</p>
+            <h1 id="hub-title">Your software.</h1>
+            <p class="sub" id="hub-sub">Checking for updates…</p>
+            <p class="hub-identity" id="hub-identity"></p>
+          </div>
         </div>
-      </div>
-    </form>
+        <div id="pkg-list"></div>
+        <div class="hub-actions">
+          <button class="secondary" id="check-btn">Check for updates</button>
+          <button id="install-all-btn" style="display:none">Install all</button>
+          <button id="launch-btn">Launch Stria Works</button>
+          <button class="secondary" id="stop-btn" style="display:none">Stop</button>
+        </div>
+        <p class="status" id="works-status"></p>
+        <p class="status" id="hub-status"></p>
+      </section>
+    </main>
 
-    <div class="pairing">
-      <h2>Pairing with a code instead?</h2>
-      <p class="sub-faint">Mint one in the portal under Machines — one code, one machine — and enter it here. The install binds to your organization before it runs anything.</p>
-      <label for="code">Pairing code from the portal (AAA-BBB-CCC)</label>
-      <input id="code" type="text" autocomplete="off" placeholder="AAA-BBB-CCC" />
-      <p class="status" id="status"></p>
-      <button class="secondary" id="auth-switch" style="display:none"></button>
-    </div>
-
-    <p class="trust-row">HttpOnly session · workspace-scoped access · human approvals by policy<br />Builds are issued from your workspace — the portal hands this machine the version you&apos;re entitled to.</p>
-  </div>
-
-  <!-- Software hub view (shown after pairing) -->
-  <div class="card" id="hub">
-    <p class="eyebrow">Stria Software Hub</p>
-    <h1 id="hub-title">Your software.</h1>
-    <p class="sub" id="hub-sub">Checking for updates…</p>
-    <div id="pkg-list"></div>
-    <div class="hub-actions">
-      <button class="secondary" id="check-btn">Check for updates</button>
-      <button id="install-all-btn" style="display:none">Install all</button>
-      <button id="launch-btn">Launch Stria Works</button>
-      <button class="secondary" id="stop-btn" style="display:none">Stop</button>
-    </div>
-    <p class="status" id="works-status"></p>
-    <p class="status" id="hub-status"></p>
+    <footer class="footer">
+      <span>© Stria Systems · Your organization's work record</span>
+      <nav aria-label="Footer">
+        <a href="https://striasystems.com/security" target="_blank" rel="noreferrer">Security</a>
+        <a href="https://striasystems.com/download" target="_blank" rel="noreferrer">Download</a>
+      </nav>
+    </footer>
   </div>
 
   <script>
@@ -462,15 +1125,62 @@
     };
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-    // Auto-paired: if ~/.stria/portal.json exists, skip to hub
+    // Tauri draws the macOS traffic lights over the webview. Mark the
+    // platform so the topbar can inset the brand and become a drag region
+    // without moving any other platform's chrome.
+    document.body.classList.add(
+      /Mac|iPhone|iPad/.test(navigator.userAgent) ? "platform-macos" : "platform-other",
+    );
+
+    // If this Mac is already paired, the portal identity is authoritative:
+    // name the account, prefill the email, and let the operator open the hub
+    // without retyping. A stale machine token still lands here; the hub will
+    // then ask for a fresh sign-in rather than pretending the session is live.
+    async function recallPairedAccount() {
+      try {
+        const id = await window.__TAURI__.core.invoke("portal_identity");
+        if (!id?.paired || !id.userEmail) return;
+        const workspace = id.orgName || id.orgId || "your workspace";
+        const email = document.getElementById("login-email");
+        document.getElementById("account-email").textContent = id.userEmail;
+        document.getElementById("account-org").textContent = workspace;
+        document.getElementById("account").hidden = false;
+        const linkMachine = document.getElementById("link-machine");
+        if (linkMachine) linkMachine.hidden = true;
+        if (!email.value) email.value = id.userEmail;
+        document.getElementById("auth-title").textContent = "Welcome back.";
+        document.getElementById("auth-sub").textContent =
+          `This Mac is paired with ${workspace}. Sign in to refresh its session, or open the hub.`;
+        document.getElementById("account-open").onclick = async () => {
+          document.getElementById("setup").style.display = "none";
+          document.getElementById("hub").style.display = "block";
+          await loadHub();
+        };
+        document.getElementById("account-other").onclick = () => {
+          document.getElementById("account").hidden = true;
+          const linkMachine = document.getElementById("link-machine");
+          if (linkMachine) linkMachine.hidden = false;
+          email.value = "";
+          document.getElementById("login-pass").value = "";
+          showSignInTab();
+        };
+      } catch {
+        // Outside Tauri or no identity file: the normal sign-in form is
+        // already the right surface.
+      }
+    }
+
+    // Auto-paired: if ~/.stria/portal.json exists, skip to hub.
     (async () => {
+      await recallPairedAccount();
       try {
         await window.__TAURI__.core.invoke("fetch_software_updates");
         document.getElementById("setup").style.display = "none";
         document.getElementById("hub").style.display = "block";
         await loadHub();
       } catch {
-        // Not paired — show setup
+        // Not paired or the token expired — stay on setup, with identity
+        // recall when the file is present.
       }
     })();
 
@@ -504,6 +1214,161 @@
       });
     });
 
+    // Pairing is a secondary path: the primary form owns the window, and the
+    // code field appears only when asked for. A deep link or a completed
+    // registration opens it automatically.
+    const linkMachineStart = document.getElementById("link-machine-start");
+    const linkMachineStatus = document.getElementById("link-machine-status");
+    linkMachineStart?.addEventListener("click", async () => {
+      linkMachineStatus.textContent = "Opening your browser…";
+      try {
+        await window.__TAURI__.core.invoke("open_link_page");
+        linkMachineStatus.textContent =
+          "Browser opened. Sign in with your email code or GitHub; the Launcher will finish the link.";
+      } catch (e) {
+        linkMachineStatus.textContent = String(e);
+      }
+    });
+
+    const pairingPanel = document.getElementById("pairing-panel");
+    const pairingToggle = document.getElementById("pairing-toggle");
+    const pairEmail = document.getElementById("pair-email");
+    const pairEmailStatus = document.getElementById("pair-email-status");
+    const emailCodeBtn = document.getElementById("email-code");
+
+    // Prefer the account already typed into the sign-in form; keep it in
+    // sync only while the pairing panel is open so a later login edit does
+    // not silently change the address a code was sent to.
+    function prefillPairEmail() {
+      if (pairEmail.value) return;
+      const typed =
+        document.getElementById("login-email")?.value.trim() ||
+        document.getElementById("email")?.value.trim() ||
+        "";
+      if (typed) pairEmail.value = typed;
+    }
+
+    function setPairingOpen(open) {
+      pairingPanel.style.display = open ? "block" : "none";
+      pairingToggle.textContent = open
+        ? "Hide pairing code"
+        : "Have a pairing code? Pair instead →";
+      if (open) {
+        prefillPairEmail();
+        pairEmail.focus();
+      }
+    }
+
+    emailCodeBtn.addEventListener("click", async () => {
+      const address = pairEmail.value.trim();
+      if (!address) {
+        pairEmailStatus.textContent = "Enter the email on your Stria account.";
+        pairEmail.focus();
+        return;
+      }
+      emailCodeBtn.disabled = true;
+      pairEmailStatus.textContent = "Sending a sign-in code…";
+      try {
+        await window.__TAURI__.core.invoke("email_login_code", { email: address });
+        pairEmailStatus.textContent = `Code sent to ${address}. Check your inbox, then enter it below.`;
+        emailCodeValue.focus();
+      } catch (err) {
+        pairEmailStatus.textContent = String(err);
+      } finally {
+        emailCodeBtn.disabled = false;
+      }
+    });
+
+    const emailCodeValue = document.getElementById("email-code-value");
+    const emailCodeVerify = document.getElementById("email-code-verify");
+    emailCodeValue.addEventListener("input", () => {
+      const digits = emailCodeValue.value.replace(/[^0-9]/g, "").slice(0, 6);
+      emailCodeValue.value = digits.length > 3
+        ? `${digits.slice(0, 3)} ${digits.slice(3)}`
+        : digits;
+    });
+    emailCodeVerify.addEventListener("click", async () => {
+      const address = pairEmail.value.trim();
+      const code = emailCodeValue.value.replace(/[^0-9]/g, "");
+      if (!address) {
+        pairEmailStatus.textContent = "Enter the email on your Stria account.";
+        pairEmail.focus();
+        return;
+      }
+      if (code.length !== 6) {
+        pairEmailStatus.textContent = "Enter the six-digit code from the email.";
+        emailCodeValue.focus();
+        return;
+      }
+      emailCodeVerify.disabled = true;
+      pairEmailStatus.textContent = "Signing in and pairing this machine…";
+      try {
+        await window.__TAURI__.core.invoke("verify_email_code", { email: address, code });
+        pairEmailStatus.textContent = "Paired. Loading software hub…";
+        await sleep(500);
+        document.getElementById("setup").style.display = "none";
+        document.getElementById("hub").style.display = "block";
+        await loadHub();
+      } catch (err) {
+        pairEmailStatus.textContent = String(err);
+        emailCodeValue.focus();
+      } finally {
+        emailCodeVerify.disabled = false;
+      }
+    });
+
+    pairingToggle.addEventListener("click", () => {
+      setPairingOpen(pairingPanel.style.display === "none");
+    });
+
+    // Verification email: registration and unverified sign-in both surface
+    // this action. The portal reports whether the provider actually accepted
+    // the message; the launcher repeats that answer instead of assuming an
+    // inbox was reached.
+    const resendBtn = document.getElementById("resend-email");
+    function showResend(email) {
+      resendBtn.dataset.email = email || "";
+      resendBtn.style.display = "inline-flex";
+    }
+    function hideResend() {
+      resendBtn.style.display = "none";
+      resendBtn.dataset.email = "";
+    }
+    resendBtn.addEventListener("click", async () => {
+      const email =
+        resendBtn.dataset.email ||
+        emailOf("login-email") ||
+        emailOf("email");
+      if (!email) {
+        status("Enter the email you registered with first.", true);
+        return;
+      }
+      const label = resendBtn.textContent;
+      resendBtn.disabled = true;
+      resendBtn.textContent = "Sending…";
+      try {
+        const result = await window.__TAURI__.core.invoke("resend_verification", {
+          email,
+        });
+        if (result.email_verified) {
+          status("That address is already verified — sign in to continue.");
+          hideResend();
+        } else if (result.sent) {
+          status(`Verification email sent to ${email}. Check your inbox.`);
+        } else {
+          status(
+            "No email was sent. Check that this is the address you registered with, then try again.",
+            true
+          );
+        }
+      } catch (err) {
+        status(String(err), true);
+      } finally {
+        resendBtn.disabled = false;
+        resendBtn.textContent = label;
+      }
+    });
+
     // ── Wizard routing: every step resolves forward. Errors never strand
     // the operator on a dead form — they route to the step that unblocks
     // them, carrying whatever was already typed.
@@ -519,6 +1384,11 @@
       setRecoveryMode(false);
     }
 
+    const SIGNIN_SUB =
+      "Objectives, evidence, cost and machines — installed at your workspace's pinned version.";
+    const CREATE_SUB =
+      "One workspace holds your objectives, evidence, costs and machines. The launcher installs Stria Works at the version your workspace pins.";
+
     function showCreateTab(notice) {
       document.getElementById("tab-create").classList.add("active");
       document.getElementById("tab-signin").classList.remove("active");
@@ -526,6 +1396,7 @@
       document.getElementById("signin-form").style.display = "none";
       document.getElementById("auth-title").textContent = "Create your organization.";
       document.getElementById("auth-eyebrow").textContent = "Stria Launcher · New workspace";
+      document.getElementById("auth-sub").textContent = CREATE_SUB;
       resetSecondFactor();
       authSwitch.style.display = "none";
       status(notice || "");
@@ -539,6 +1410,7 @@
       document.getElementById("signin-form").style.display = "block";
       document.getElementById("auth-title").textContent = "Sign in to your organization.";
       document.getElementById("auth-eyebrow").textContent = "Stria Launcher";
+      document.getElementById("auth-sub").textContent = SIGNIN_SUB;
       resetSecondFactor();
       authSwitch.style.display = "none";
       status(notice || "");
@@ -572,13 +1444,35 @@
       const email = emailOf("email");
       status("Creating your workspace…");
       try {
-        await window.__TAURI__.core.invoke("register_workspace", {
+        const result = await window.__TAURI__.core.invoke("register_workspace", {
           email,
           organization: document.getElementById("org").value,
           password: document.getElementById("pass").value,
         });
-        status("Workspace created. Check your email for the verification link, then enter the pairing code below.");
-        document.getElementById("code").focus();
+        const address = result.email || email;
+        if (result.email_verified) {
+          status("That address is already verified — sign in to continue.");
+          hideResend();
+        } else if (result.verification_sent === true) {
+          status(
+            `Verification email sent to ${address}. Open it, then sign in here — this machine pairs itself.`
+          );
+          showResend(address);
+        } else if (result.verification_sent === false) {
+          status(
+            `Account created, but the email could not be sent to ${address}.`,
+            true
+          );
+          showResend(address);
+        } else {
+          // Older portal builds do not report delivery. State the fact, not
+          // an alarm, and keep the resend one click away.
+          status(
+            `Account created. Check ${address} for the verification email; resend it below if it doesn't arrive.`
+          );
+          showResend(address);
+        }
+        setPairingOpen(false);
       } catch (err) {
         const msg = String(err);
         if (/already exists/i.test(msg)) {
@@ -639,6 +1533,14 @@
         const msg = String(err);
         const challenge = msg.match(/^TWO_FACTOR_REQUIRED\|(.+)$/);
         const setupNeed = msg.match(/^TWO_FACTOR_SETUP_REQUIRED\|(.*)$/);
+        const verifyNeed = msg.match(/^EMAIL_VERIFICATION_REQUIRED\|(.*)$/);
+        if (verifyNeed) {
+          const address = verifyNeed[1] || email;
+          status(`Verify ${address} to finish signing in.`, true);
+          showResend(address);
+          authSwitch.style.display = "none";
+          return;
+        }
         if (challenge) {
           // Password verified — the workspace owes a fresh code.
           pendingChallenge = challenge[1];
@@ -800,6 +1702,7 @@
         return;
       }
       if (!code) return;
+      setPairingOpen(true);
       codeInput.value = code;
       codeInput.dispatchEvent(new Event("input")); // normalize to AAA-BBB-CCC
       if (!PAIR_RE.test(codeInput.value)) {
@@ -824,7 +1727,26 @@
       // Previewed outside Tauri (browser): manual code entry still works.
     }
 
+    // The launcher is the identity manager: it shows the employee and the
+    // customer workspace the portal paired, and never the machine token.
+    async function renderIdentity() {
+      const el = document.getElementById("hub-identity");
+      try {
+        const id = await window.__TAURI__.core.invoke("portal_identity");
+        if (!id.paired || (!id.orgId && !id.orgName)) {
+          el.textContent = "";
+          return;
+        }
+        const workspace = id.orgName || id.orgId;
+        el.textContent = id.userEmail ? `${id.userEmail} · ${workspace}` : workspace;
+        el.title = `Customer workspace ${id.orgId || "unknown"} · machine ${id.machineId}`;
+      } catch {
+        el.textContent = "";
+      }
+    }
+
     async function loadHub() {
+      renderIdentity();
       hubStatus("Checking for updates…");
       try {
         const platform = await window.__TAURI__.core.invoke("platform_name");
@@ -854,7 +1776,9 @@
           hubStatus("All packages up to date.");
           document.getElementById("install-all-btn").style.display = "none";
         } else {
-          document.getElementById("hub-title").textContent = data.updates.length + " update available.";
+          const count = data.updates.length;
+          document.getElementById("hub-title").textContent =
+            `${count} update${count === 1 ? "" : "s"} available.`;
           document.getElementById("hub-sub").textContent = data.org_id;
           document.getElementById("install-all-btn").style.display = "block";
 
@@ -892,30 +1816,36 @@
             div.append(head, meta, actions, progress);
             list.appendChild(div);
             // Bind install
-            const btn = div.querySelector(".install-btn");
-            btn.addEventListener("click", async () => {
+            const installBtn = div.querySelector(".install-btn");
+            installBtn.addEventListener("click", async () => {
               if (!asset) { hubStatus(`No ${platform} build for ${u.package_id}`, true); return; }
-              btn.textContent = "Downloading…";
-              btn.disabled = true;
+              installBtn.textContent = "Downloading…";
+              installBtn.disabled = true;
               try {
                 const path = await window.__TAURI__.core.invoke("download_suite_asset", { url: asset.url, expectedSha256: asset.sha256 });
-                btn.textContent = "Installed ✓";
-                btn.style.background = "rgba(126,232,176,0.2)";
+                const install = await window.__TAURI__.core.invoke("install_suite_asset", { path });
+                const applied = install?.applied !== false;
+                installBtn.textContent = applied ? "Installed ✓" : "Downloaded ✓";
+                installBtn.classList.add("done");
                 div.querySelector(".pkg-status").className = "pkg-status installed";
-                div.querySelector(".pkg-status").textContent = "Installed";
-                hubStatus(`Installed ${u.package_id} → ${path}`);
-                // Report back to portal
-                await window.__TAURI__.core.invoke("report_software_versions", {
-                  packages: { [u.package_id]: u.target_version }
-                }).catch(() => {});
+                div.querySelector(".pkg-status").textContent = applied ? "Installed" : "Downloaded";
+                hubStatus(applied
+                  ? `Installed ${u.package_id} → ${install.path || path}`
+                  : `Downloaded ${u.package_id} — ${install?.note || "manual install step required."}`);
+                // Only report a version the machine is actually running.
+                if (applied) {
+                  await window.__TAURI__.core.invoke("report_software_versions", {
+                    packages: { [u.package_id]: u.target_version }
+                  }).catch(() => {});
+                }
               } catch (err) {
-                btn.textContent = "Retry install";
-                btn.disabled = false;
+                installBtn.textContent = "Retry install";
+                installBtn.disabled = false;
                 hubStatus(`Failed: ${err}`, true);
               }
             });
           }
-          hubStatus(data.updates.length + " update(s) available.");
+          hubStatus(`${data.updates.length} update${data.updates.length === 1 ? "" : "s"} available.`);
         }
 
         // Report launcher version back to portal
